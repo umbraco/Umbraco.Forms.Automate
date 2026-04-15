@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="nuget.config" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Umbraco.Forms.Automate/Umbraco.Forms.Automate.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Umbraco.Forms.Automate.Tests.Unit/Umbraco.Forms.Automate.Tests.Unit.csproj" />
+  </Folder>
+  <Folder Name="/demo/">
+    <Project Path="demo/Umbraco.Forms.Automate.DemoSite/Umbraco.Forms.Automate.DemoSite.csproj" />
+  </Folder>
+</Solution>

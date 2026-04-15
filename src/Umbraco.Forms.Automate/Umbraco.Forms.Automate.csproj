@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <Title>Umbraco Forms Automate</Title>
+        <Description>Umbraco Forms triggers and actions for Umbraco Automate</Description>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Umbraco.Automate.Core" />
+        <PackageReference Include="Umbraco.Forms.Core" />
+    </ItemGroup>
+
+</Project>
