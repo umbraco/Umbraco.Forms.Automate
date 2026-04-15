@@ -4,6 +4,11 @@
     <CentralPackageFloatingVersionsEnabled>true</CentralPackageFloatingVersionsEnabled>
   </PropertyGroup>
 
+  <!-- Versioning -->
+  <ItemGroup>
+    <GlobalPackageReference Include="Nerdbank.GitVersioning" Version="3.8.118" />
+  </ItemGroup>
+
   <!-- Umbraco Automate -->
   <ItemGroup>
     <PackageVersion Include="Umbraco.Automate.Core" Version="0.1.0-*" />

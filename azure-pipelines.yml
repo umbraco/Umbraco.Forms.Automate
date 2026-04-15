@@ -1,0 +1,194 @@
+# Azure DevOps CI Pipeline for Umbraco.Forms.Automate
+# Adapted from Umbraco.Automate pipeline
+
+trigger:
+    branches:
+        include:
+            - main
+            - dev
+            - release/*
+            - hotfix/*
+            - feature/*
+
+pr:
+    branches:
+        include:
+            - main
+            - dev
+
+variables:
+    - group: dependency-track
+    - name: DOTNET_NOLOGO
+      value: "true"
+    - name: DOTNET_CLI_TELEMETRY_OPTOUT
+      value: "true"
+
+stages:
+    # ============================================================
+    # Build & Test everything
+    # ============================================================
+    - stage: Build
+      displayName: Build & Test
+      jobs:
+          - job: BuildAndTest
+            displayName: Build & Test
+            pool:
+                vmImage: "ubuntu-latest"
+            steps:
+                - checkout: self
+                  fetchDepth: 0
+
+                - task: UseDotNet@2
+                  displayName: Setup .NET
+                  inputs:
+                      useGlobalJson: true
+
+                - script: dotnet restore Umbraco.Forms.Automate.slnx
+                  displayName: Restore
+
+                - script: dotnet build Umbraco.Forms.Automate.slnx --configuration Release --no-restore -p:DisableCloudBuildNumber=true
+                  displayName: Build
+
+                - script: dotnet test Umbraco.Forms.Automate.slnx --configuration Release --no-build --verbosity normal --logger trx --results-directory $(Agent.TempDirectory)/TestResults
+                  displayName: Test
+
+                - task: PublishTestResults@2
+                  displayName: Publish test results
+                  condition: always()
+                  inputs:
+                      testResultsFormat: VSTest
+                      testResultsFiles: "$(Agent.TempDirectory)/TestResults/**/*.trx"
+                      mergeTestResults: true
+
+                - task: PublishPipelineArtifact@1
+                  displayName: Upload build outputs
+                  inputs:
+                      targetPath: $(Build.SourcesDirectory)
+                      artifact: build-outputs
+                      publishLocation: pipeline
+
+    # ============================================================
+    # Generate & Upload SBOM - Only runs on push to main/dev/hotfix/release
+    # ============================================================
+    - stage: GenerateSBOM
+      displayName: Generate & Upload SBOM
+      dependsOn: Build
+      condition: |
+          and(
+            succeeded(),
+            ne(variables['Build.Reason'], 'PullRequest')
+          )
+      jobs:
+          - job: GenerateSBOM
+            displayName: Generate SBOM - Umbraco.Forms.Automate
+            pool:
+                vmImage: "ubuntu-latest"
+            steps:
+                - checkout: self
+                  fetchDepth: 1
+
+                - template: .azure-pipelines/templates/generate-sbom.yml
+                  parameters:
+                      product: Umbraco.Forms.Automate
+
+    # ============================================================
+    # Validate Changelogs - Only runs on release and hotfix branches
+    # ============================================================
+    - stage: ValidateChangelogs
+      displayName: Validate Changelogs
+      dependsOn: Build
+      condition: |
+          and(
+            succeeded(),
+            ne(variables['Build.Reason'], 'PullRequest'),
+            or(
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/hotfix/')
+            )
+          )
+      jobs:
+          - job: ValidateChangelogFiles
+            displayName: Validate CHANGELOG.md Files
+            pool:
+                vmImage: "ubuntu-latest"
+            steps:
+                - checkout: self
+                  fetchDepth: 0
+
+                - task: PowerShell@2
+                  displayName: Validate changelogs
+                  inputs:
+                      filePath: .azure-pipelines/scripts/validate-changelogs.ps1
+                      pwsh: true
+                      failOnStderr: false
+
+    # ============================================================
+    # Pack Stage - Only runs on push to main/dev/hotfix/release branches
+    # ============================================================
+    - stage: Pack
+      displayName: Pack NuGet Packages
+      dependsOn:
+          - Build
+          - ValidateChangelogs
+      condition: |
+          and(
+            in(dependencies.Build.result, 'Succeeded'),
+            in(dependencies.ValidateChangelogs.result, 'Succeeded', 'Skipped'),
+            ne(variables['Build.Reason'], 'PullRequest'),
+            or(
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/hotfix/'),
+              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'),
+              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+              eq(variables['Build.SourceBranch'], 'refs/heads/dev')
+            )
+          )
+      jobs:
+          - job: Pack
+            displayName: Pack Umbraco.Forms.Automate
+            pool:
+                vmImage: "ubuntu-latest"
+            steps:
+                - checkout: self
+                  fetchDepth: 0
+
+                - task: UseDotNet@2
+                  displayName: Setup .NET
+                  inputs:
+                      useGlobalJson: true
+
+                - task: DownloadPipelineArtifact@2
+                  displayName: Download build outputs
+                  inputs:
+                      artifact: build-outputs
+                      path: $(Build.SourcesDirectory)
+
+                - template: .azure-pipelines/templates/pack-product.yml
+                  parameters:
+                      product: Umbraco.Forms.Automate
+
+                - template: .azure-pipelines/templates/upload-packages.yml
+                  parameters:
+                      product: Umbraco.Forms.Automate
+
+    # ============================================================
+    # Finalize - set build number
+    # ============================================================
+    - stage: Finalize
+      displayName: Finalize Build
+      dependsOn:
+          - GenerateSBOM
+          - Pack
+      condition: not(canceled())
+      jobs:
+          - job: SetBuildNumber
+            displayName: Set build number
+            pool:
+                vmImage: "ubuntu-latest"
+            steps:
+                - task: Bash@3
+                  displayName: Set build number (branch + date)
+                  inputs:
+                      targetType: inline
+                      script: |
+                          BUILD_DATE=$(date -u +%Y%m%d)
+                          echo "##vso[build.updatebuildnumber]$(Build.SourceBranchName)-${BUILD_DATE}-$(Build.BuildID)"
