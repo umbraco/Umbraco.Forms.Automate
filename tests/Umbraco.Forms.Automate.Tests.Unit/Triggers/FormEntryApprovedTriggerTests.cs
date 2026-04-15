@@ -14,9 +14,7 @@ namespace Umbraco.Forms.Automate.Tests.Unit.Triggers;
 public class FormEntryApprovedTriggerTests
 {
     private readonly FormEntryApprovedTrigger _trigger = new(
-        new TriggerInfrastructure(
-            Mock.Of<IEditableModelResolver>(),
-            Options.Create(new DeduplicationOptions { WindowMinutes = 5 })));
+        new TriggerInfrastructure(Mock.Of<IEditableModelResolver>()));
 
     [Fact]
     public void HasCorrectAlias()

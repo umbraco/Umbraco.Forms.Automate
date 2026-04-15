@@ -31,7 +31,7 @@ public sealed class FormSubmittedTrigger
         {
             TriggerAlias = Alias,
             InitiatorType = "system",
-            IdempotencyKey = GenerateIdempotencyKey(record.UniqueId),
+            IdempotencyKey = GenerateIdempotencyKey(record.UniqueId, notification.Record.Id),
             Output = new FormRecordOutput
             {
                 FormId = form.Id,
