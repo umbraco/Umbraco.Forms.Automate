@@ -17,7 +17,7 @@ pr:
             - dev
 
 variables:
-    - group: dependency-track
+    - group: DependencyTrack
     - name: DOTNET_NOLOGO
       value: "true"
     - name: DOTNET_CLI_TELEMETRY_OPTOUT

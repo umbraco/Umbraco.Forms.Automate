@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.slnx$|\\\\.sln$\")",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet build:*)"
+    ]
+  }
+}
