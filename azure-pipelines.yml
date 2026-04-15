@@ -54,11 +54,12 @@ stages:
 
                 - task: PublishTestResults@2
                   displayName: Publish test results
-                  condition: always()
+                  condition: succeededOrFailed()
                   inputs:
                       testResultsFormat: VSTest
                       testResultsFiles: "$(Agent.TempDirectory)/TestResults/**/*.trx"
                       mergeTestResults: true
+                      failTaskOnMissingResultsFile: false
 
                 - task: PublishPipelineArtifact@1
                   displayName: Upload build outputs
