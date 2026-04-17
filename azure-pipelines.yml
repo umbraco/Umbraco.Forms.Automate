@@ -60,6 +60,7 @@ stages:
                       testResultsFiles: "$(Agent.TempDirectory)/TestResults/**/*.trx"
                       mergeTestResults: true
                       failTaskOnMissingResultsFile: false
+                      publishRunAttachments: false
 
                 - task: PublishPipelineArtifact@1
                   displayName: Upload build outputs

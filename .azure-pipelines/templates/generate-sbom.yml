@@ -24,7 +24,7 @@ steps:
           pwsh: true
           script: |
               # Extract major version from version.json
-              $versionFile = Join-Path "${{ parameters.product }}" "version.json"
+              $versionFile = "version.json"
               if (-not (Test-Path $versionFile)) {
                 Write-Error "version.json not found at $versionFile"
                 exit 1
@@ -56,7 +56,7 @@ steps:
                 --project-version $version `
                 --server-url $env:DT_BASE_URL `
                 --api-key $env:DT_API_KEY `
-                "${{ parameters.product }}/"
+                "src/"
 
               if ($LASTEXITCODE -ne 0) {
                 Write-Error "cdxgen failed with exit code $LASTEXITCODE"

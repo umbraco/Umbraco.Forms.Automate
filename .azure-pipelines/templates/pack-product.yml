@@ -20,14 +20,13 @@ steps:
     - script: nbgv cloud
       displayName: Set version
       condition: ${{ parameters.condition }}
-      workingDirectory: ${{ parameters.product }}
 
-    - script: dotnet restore ${{ parameters.product }}/${{ parameters.product }}.slnx --configfile NuGet.CI.config -p:DisableCloudBuildNumber=true
+    - script: dotnet restore ${{ parameters.product }}.slnx --configfile NuGet.CI.config -p:DisableCloudBuildNumber=true
       displayName: Restore packages
       condition: ${{ parameters.condition }}
 
     - script: |
-          dotnet pack ${{ parameters.product }}/${{ parameters.product }}.slnx \
+          dotnet pack ${{ parameters.product }}.slnx \
             --configuration Release \
             --no-build \
             --output ./artifacts/nupkg \
