@@ -60,12 +60,19 @@ stages:
           - script: dotnet restore $(solution)
             displayName: Restore NuGet packages
 
+          # Set version from version.json + git height (writes NBGV_* env vars for MSBuild)
+          - script: dotnet tool install --global nbgv || true
+            displayName: Install NBGV
+
+          - script: nbgv cloud
+            displayName: Set version
+
           # Build
-          - script: dotnet build $(solution) --configuration $(buildConfiguration) --no-restore -p:ContinuousIntegrationBuild=true
+          - script: dotnet build $(solution) --configuration $(buildConfiguration) --no-restore -p:ContinuousIntegrationBuild=true -p:DisableCloudBuildNumber=true
             displayName: Run dotnet build
 
           # Pack
-          - script: dotnet pack $(solution) --configuration $(buildConfiguration) --no-build --output $(Build.ArtifactStagingDirectory)/nupkg
+          - script: dotnet pack $(solution) --configuration $(buildConfiguration) --no-build --output $(Build.ArtifactStagingDirectory)/nupkg -p:DisableCloudBuildNumber=true
             displayName: Run dotnet pack
 
           # Publish
