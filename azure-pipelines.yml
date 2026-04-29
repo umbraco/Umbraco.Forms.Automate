@@ -12,7 +12,7 @@ parameters:
   - name: cache_nuget
     displayName: Cache NuGet packages
     type: boolean
-    default: false
+    default: true
 
 variables:
   solution: Umbraco.Forms.Automate.slnx
@@ -47,15 +47,14 @@ stages:
               useGlobalJson: true
 
           # Cache and restore NuGet packages
-          - task: Cache@2
-            condition: ${{ parameters.cache_nuget }}
-            displayName: Cache NuGet packages
-            inputs:
-              key: 'nuget | "$(Agent.OS)" | **/packages.lock.json, !**/bin/**, !**/obj/**'
-              restoreKeys: |
-                nuget | "$(Agent.OS)"
-                nuget
-              path: $(NUGET_PACKAGES)
+          - ${{ if parameters.cache_nuget }}:
+            - task: Cache@2
+              displayName: Cache NuGet packages
+              inputs:
+                key: 'nuget | "$(Agent.OS)" | Directory.Packages.props'
+                restoreKeys: |
+                  nuget | "$(Agent.OS)"
+                path: $(NUGET_PACKAGES)
 
           - script: dotnet restore $(solution)
             displayName: Restore NuGet packages
