@@ -1,0 +1,130 @@
+parameters:
+  - name: solution
+    type: string
+  - name: productName
+    type: string
+  - name: productGroup
+    type: string
+    default: DXP
+  - name: cache_nuget
+    type: boolean
+    default: true
+  - name: runSbom
+    type: boolean
+    default: true
+
+jobs:
+  - job: Build
+    pool:
+      vmImage: ubuntu-latest
+    variables:
+      - group: dependency-track
+      - name: NUGET_PACKAGES
+        value: $(Pipeline.Workspace)/.nuget/packages
+    steps:
+      - checkout: self
+        fetchDepth: 0
+
+      - task: NuGetAuthenticate@1
+        displayName: Authenticate NuGet
+
+      - task: UseDotNet@2
+        displayName: Use .NET SDK from global.json
+        inputs:
+          useGlobalJson: true
+
+      - ${{ if parameters.cache_nuget }}:
+        - task: Cache@2
+          displayName: Cache NuGet packages
+          inputs:
+            key: 'nuget | "$(Agent.OS)" | Directory.Packages.props'
+            restoreKeys: |
+              nuget | "$(Agent.OS)"
+            path: $(NUGET_PACKAGES)
+
+      - script: dotnet restore ${{ parameters.solution }}
+        displayName: Restore NuGet packages
+
+      - script: dotnet tool install --global nbgv || true
+        displayName: Install NBGV
+
+      - script: nbgv cloud
+        displayName: Set version
+
+      - script: dotnet build ${{ parameters.solution }} --configuration Release --no-restore -p:ContinuousIntegrationBuild=true -p:DisableCloudBuildNumber=true
+        displayName: Run dotnet build
+
+      - script: dotnet pack ${{ parameters.solution }} --configuration Release --no-build --output $(Build.ArtifactStagingDirectory)/nupkg -p:DisableCloudBuildNumber=true
+        displayName: Run dotnet pack
+
+      - task: PublishPipelineArtifact@1
+        displayName: Publish NuGet packages
+        inputs:
+          targetPath: $(Build.ArtifactStagingDirectory)/nupkg
+          artifactName: nupkg
+
+      - task: PublishPipelineArtifact@1
+        displayName: Publish build output
+        inputs:
+          targetPath: $(Build.SourcesDirectory)
+          artifactName: build_output
+
+      - ${{ if parameters.runSbom }}:
+        - script: npm install --global @cyclonedx/cdxgen
+          displayName: Install cdxgen
+
+        - task: PowerShell@2
+          displayName: Generate & upload SBOM
+          inputs:
+            targetType: inline
+            pwsh: true
+            script: |
+              $ErrorActionPreference = 'Stop'
+              $bomDir  = "$(Build.ArtifactStagingDirectory)/bom"
+              $bomPath = "$bomDir/bom.json"
+              New-Item -ItemType Directory -Force -Path $bomDir | Out-Null
+              Set-Location "$(Build.SourcesDirectory)"
+
+              $version = 'vUNKNOWN'
+              if (Test-Path 'version.json') {
+                try { $raw = (Get-Content 'version.json' -Raw | ConvertFrom-Json).version } catch {}
+                if ($raw -match '^(\d+)\.') { $version = "v$($matches[1])" }
+                elseif ($raw -match '^\d+$') { $version = "v$raw" }
+              }
+              Write-Host "Project version: $version"
+
+              & cdxgen --recurse --spec-version 1.6 --output $bomPath --json-pretty `
+                --project-group '${{ parameters.productGroup }}' `
+                --project-name  '${{ parameters.productName }}' `
+                --project-version $version
+              if ($LASTEXITCODE -ne 0) { throw "cdxgen failed with exit code $LASTEXITCODE" }
+
+              if (-not $env:DT_API_KEY -or -not $env:DT_BASE_URL) {
+                Write-Host "DT_API_KEY / DT_BASE_URL not configured - skipping upload"
+                return
+              }
+
+              $payload = @{
+                projectName    = '${{ parameters.productName }}'
+                projectVersion = $version
+                autoCreate     = $true
+                bom            = [Convert]::ToBase64String([IO.File]::ReadAllBytes($bomPath))
+              } | ConvertTo-Json -Compress
+              $uri = ($env:DT_BASE_URL.TrimEnd('/')) + '/api/v1/bom'
+              try {
+                Invoke-RestMethod -Method Put -Uri $uri -Body $payload -ContentType 'application/json' -Headers @{ 'X-Api-Key' = $env:DT_API_KEY } | Out-Null
+                Write-Host 'SBOM uploaded'
+              } catch {
+                Write-Host "Upload failed: $($_.Exception.Message)"
+                if ($_.ErrorDetails.Message) { Write-Host "Response: $($_.ErrorDetails.Message)" }
+                throw
+              }
+          env:
+            DT_API_KEY:  $(DT_API_KEY)
+            DT_BASE_URL: $(DT_BASE_URL)
+
+        - task: PublishPipelineArtifact@1
+          displayName: Publish SBOM
+          inputs:
+            targetPath: $(Build.ArtifactStagingDirectory)/bom
+            artifactName: SBOM
