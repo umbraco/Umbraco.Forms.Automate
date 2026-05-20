@@ -12,7 +12,8 @@ namespace Umbraco.Forms.Automate.Actions;
 [Action("umbracoForms.exportEntries", "Export Form Entries",
     Description = "Exports form entries as JSON.",
     Group = "Forms",
-    Icon = "icon-list")]
+    Icon = "icon-list",
+    RequiredSections = [Constants.Sections.Forms])]
 public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, ExportEntriesOutput>
 {
     private readonly IRecordReaderService _recordReaderService;

@@ -10,7 +10,8 @@ namespace Umbraco.Forms.Automate.Triggers;
 [Trigger("umbracoForms.formEntryApproved", "Form Entry Approved",
     Description = "Fires when a form entry is approved.",
     Group = "Forms",
-    Icon = "icon-check")]
+    Icon = "icon-check",
+    RequiredSections = [Constants.Sections.Forms])]
 public sealed class FormEntryApprovedTrigger
     : NotificationTriggerBase<FormRecordTriggerSettings, FormRecordOutput, RecordApprovedNotification>
 {

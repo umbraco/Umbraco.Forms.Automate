@@ -12,7 +12,8 @@ namespace Umbraco.Forms.Automate.Actions;
 [Action("umbracoForms.submitForm", "Submit Form",
     Description = "Programmatically submits a form entry.",
     Group = "Forms",
-    Icon = "icon-checkbox-dotted")]
+    Icon = "icon-checkbox-dotted",
+    RequiredSections = [Constants.Sections.Forms])]
 public sealed class SubmitFormAction : ActionBase<SubmitFormSettings, SubmitFormOutput>
 {
     private readonly IFormService _formService;
