@@ -10,7 +10,8 @@ namespace Umbraco.Forms.Automate.Triggers;
 [Trigger("umbracoForms.formSubmitted", "Form Submitted",
     Description = "Fires when a form entry is submitted.",
     Group = "Forms",
-    Icon = "icon-checkbox")]
+    Icon = "icon-checkbox",
+    RequiredSections = [Constants.Sections.Forms])]
 public sealed class FormSubmittedTrigger
     : NotificationTriggerBase<FormRecordTriggerSettings, FormRecordOutput, RecordSubmittedNotification>
 {
