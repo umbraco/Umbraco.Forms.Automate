@@ -3,6 +3,7 @@
     <PropertyGroup>
         <Title>Umbraco Forms Automate</Title>
         <Description>Umbraco Forms triggers and actions for Umbraco Automate</Description>
+        <PackageTags>$(PackageTags);umbraco-marketplace</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
