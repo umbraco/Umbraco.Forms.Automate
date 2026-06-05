@@ -19,6 +19,11 @@
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>logo-128.png</PackageIcon>
     <PackageTags>umbraco;forms;automate;automation</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="$(MSBuildThisFileDirectory)assets\logo-128.png" Pack="true" PackagePath="" Visible="false" />
+  </ItemGroup>
 </Project>
