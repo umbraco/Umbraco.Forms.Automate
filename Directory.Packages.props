@@ -12,13 +12,13 @@
 
   <!-- Umbraco Automate -->
   <ItemGroup>
-    <PackageVersion Include="Umbraco.Automate.Core" Version="17.0.0-*" />
-    <PackageVersion Include="Umbraco.Automate.Testing" Version="17.0.0-*" />
+    <PackageVersion Include="Umbraco.Automate.Core" Version="18.0.0-*" />
+    <PackageVersion Include="Umbraco.Automate.Testing" Version="18.0.0-*" />
   </ItemGroup>
 
   <!-- Umbraco Forms -->
   <ItemGroup>
-    <PackageVersion Include="Umbraco.Forms.Core" Version="[17.4.0, 17.999.999)" />
+    <PackageVersion Include="Umbraco.Forms.Core" Version="[18.0.0, 18.999.999)" />
   </ItemGroup>
 
   <!-- Test dependencies -->
