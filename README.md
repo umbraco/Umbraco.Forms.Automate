@@ -28,9 +28,9 @@ No further wiring is required — triggers and actions are auto-discovered by Um
 ## Requirements
 
 - .NET 10.0
-- Umbraco CMS 17.x
-- Umbraco Forms 17.3+
-- Umbraco.Automate 17.0+
+- Umbraco CMS 18.x
+- Umbraco Forms 18.0+
+- Umbraco.Automate 18.0+
 
 ## Triggers
 
