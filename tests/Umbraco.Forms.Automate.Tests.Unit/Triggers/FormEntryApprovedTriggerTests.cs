@@ -6,6 +6,7 @@ using Umbraco.Cms.Core.Events;
 using Umbraco.Forms.Automate.Triggers;
 using Umbraco.Forms.Core.Enums;
 using Umbraco.Forms.Core.Models;
+using Umbraco.Forms.Core.Services;
 using Umbraco.Forms.Core.Services.Notifications;
 using Record = Umbraco.Forms.Core.Persistence.Dtos.Record;
 
@@ -14,7 +15,8 @@ namespace Umbraco.Forms.Automate.Tests.Unit.Triggers;
 public class FormEntryApprovedTriggerTests
 {
     private readonly FormEntryApprovedTrigger _trigger = new(
-        new TriggerInfrastructure(Mock.Of<IEditableModelResolver>()));
+        new TriggerInfrastructure(Mock.Of<IEditableModelResolver>()),
+        new FormFieldResolver(Mock.Of<IFormService>()));
 
     [Fact]
     public void HasCorrectAlias()
