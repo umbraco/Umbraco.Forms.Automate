@@ -33,7 +33,7 @@ public sealed class FormRecordOutput
     /// <summary>
     /// Gets the submitter's IP address.
     /// </summary>
-    public string? IP { get; init; }
+    public string? Ip { get; init; }
 
     /// <summary>
     /// Gets the associated Umbraco member key, if any.
