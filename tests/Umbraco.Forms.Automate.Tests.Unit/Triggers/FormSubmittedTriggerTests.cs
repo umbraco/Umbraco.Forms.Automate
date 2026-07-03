@@ -1,6 +1,8 @@
+using Json.Schema;
 using Microsoft.Extensions.Options;
 using Umbraco.Automate.Core.Configuration;
 using Umbraco.Automate.Core.Settings;
+using Umbraco.Automate.Core.StepTypes;
 using Umbraco.Automate.Core.Triggers;
 using Umbraco.Cms.Core.Events;
 using Umbraco.Forms.Automate.Triggers;
@@ -34,6 +36,18 @@ public class FormSubmittedTriggerTests
         => _trigger.OutputType.ShouldBe(typeof(FormRecordOutput));
 
     [Fact]
+    public void OutputSchema_ExposesIpFieldWithLowercaseAlias()
+    {
+        var schema = ((IStepType)_trigger).GetOutputSchema();
+
+        var properties = schema!.GetProperties();
+
+        properties.ShouldNotBeNull();
+        properties.Keys.ShouldContain("ip");
+        properties.Keys.ShouldNotContain("iP");
+    }
+
+    [Fact]
     public void MapEvent_ProducesEventWithCorrectOutput()
     {
         var formId = Guid.NewGuid();
@@ -64,7 +78,7 @@ public class FormSubmittedTriggerTests
         evt.Output.FormName.ShouldBe("Contact Form");
         evt.Output.RecordUniqueId.ShouldBe(recordId);
         evt.Output.State.ShouldBe("Submitted");
-        evt.Output.IP.ShouldBe("127.0.0.1");
+        evt.Output.Ip.ShouldBe("127.0.0.1");
         evt.Output.MemberKey.ShouldBe("member-123");
         evt.Output.Culture.ShouldBe("en-US");
     }

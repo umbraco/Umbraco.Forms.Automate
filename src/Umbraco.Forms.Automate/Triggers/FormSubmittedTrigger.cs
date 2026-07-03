@@ -40,7 +40,7 @@ public sealed class FormSubmittedTrigger
                 RecordUniqueId = record.UniqueId,
                 State = record.State.ToString(),
                 Created = record.Created,
-                IP = record.IP,
+                Ip = record.IP,
                 MemberKey = record.MemberKey,
                 Culture = record.Culture,
                 RecordFieldsJson = record.GenerateRecordDataAsJson(),
