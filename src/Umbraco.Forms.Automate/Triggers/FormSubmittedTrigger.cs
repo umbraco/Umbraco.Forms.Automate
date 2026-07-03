@@ -13,12 +13,13 @@ namespace Umbraco.Forms.Automate.Triggers;
     Icon = "icon-checkbox",
     RequiredSections = [Constants.Sections.Forms])]
 public sealed class FormSubmittedTrigger
-    : NotificationTriggerBase<FormRecordTriggerSettings, FormRecordOutput, RecordSubmittedNotification>
+    : DynamicFormRecordTriggerBase<RecordSubmittedNotification>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FormSubmittedTrigger"/> class.
     /// </summary>
-    public FormSubmittedTrigger(TriggerInfrastructure infrastructure) : base(infrastructure)
+    public FormSubmittedTrigger(TriggerInfrastructure infrastructure, FormFieldResolver resolver)
+        : base(infrastructure, resolver)
     {
     }
 
@@ -44,6 +45,7 @@ public sealed class FormSubmittedTrigger
                 MemberKey = record.MemberKey,
                 Culture = record.Culture,
                 RecordFieldsJson = record.GenerateRecordDataAsJson(),
+                Fields = FormFieldResolver.ExtractFields(record),
             },
         };
     }

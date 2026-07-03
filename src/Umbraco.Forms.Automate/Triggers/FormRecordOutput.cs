@@ -49,4 +49,9 @@ public sealed class FormRecordOutput
     /// Gets the record field values as a JSON string (field GUID to value mapping).
     /// </summary>
     public string? RecordFieldsJson { get; init; }
+
+    /// <summary>
+    /// Gets the submitted form's field values, keyed by camel-cased field alias.
+    /// </summary>
+    public IReadOnlyDictionary<string, object?>? Fields { get; init; }
 }
