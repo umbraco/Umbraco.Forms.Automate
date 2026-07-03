@@ -9,6 +9,7 @@ using Umbraco.Forms.Automate.Triggers;
 using Umbraco.Forms.Core.Enums;
 using Umbraco.Forms.Core.Models;
 using Umbraco.Forms.Core.Persistence.Dtos;
+using Umbraco.Forms.Core.Services;
 using Umbraco.Forms.Core.Services.Notifications;
 using Record = Umbraco.Forms.Core.Persistence.Dtos.Record;
 
@@ -16,8 +17,13 @@ namespace Umbraco.Forms.Automate.Tests.Unit.Triggers;
 
 public class FormSubmittedTriggerTests
 {
-    private readonly FormSubmittedTrigger _trigger = new(
-        new TriggerInfrastructure(Mock.Of<IEditableModelResolver>()));
+    private readonly Mock<IFormService> _formService = new();
+    private readonly FormSubmittedTrigger _trigger;
+
+    public FormSubmittedTriggerTests()
+        => _trigger = new FormSubmittedTrigger(
+            new TriggerInfrastructure(Mock.Of<IEditableModelResolver>()),
+            new FormFieldResolver(_formService.Object));
 
     [Fact]
     public void HasCorrectAlias()
@@ -32,13 +38,14 @@ public class FormSubmittedTriggerTests
         => _trigger.SettingsType.ShouldBe(typeof(FormRecordTriggerSettings));
 
     [Fact]
-    public void HasOutputType()
-        => _trigger.OutputType.ShouldBe(typeof(FormRecordOutput));
+    public void HasDynamicOutputSchema()
+        => _trigger.HasDynamicOutputSchema.ShouldBeTrue();
 
     [Fact]
-    public void OutputSchema_ExposesIpFieldWithLowercaseAlias()
+    public async Task OutputSchema_ExposesIpFieldWithLowercaseAlias()
     {
-        var schema = ((IStepType)_trigger).GetOutputSchema();
+        var schema = await ((IStepType)_trigger)
+            .GetOutputSchemaAsync(new Dictionary<string, object?>(), CancellationToken.None);
 
         var properties = schema!.GetProperties();
 
@@ -81,6 +88,22 @@ public class FormSubmittedTriggerTests
         evt.Output.Ip.ShouldBe("127.0.0.1");
         evt.Output.MemberKey.ShouldBe("member-123");
         evt.Output.Culture.ShouldBe("en-US");
+    }
+
+    [Fact]
+    public void MapEvent_PopulatesFieldsFromRecordKeyedByAlias()
+    {
+        var form = new Form { Id = Guid.NewGuid(), Name = "Contact Form" };
+        var record = new Record { UniqueId = Guid.NewGuid(), Form = form.Id };
+        record.RecordFields[Guid.NewGuid()] =
+            new RecordField(new Field { Id = Guid.NewGuid(), Alias = "email" }) { Values = { "a@b.com" } };
+
+        var notification = new RecordSubmittedNotification(record, new EventMessages(), form);
+
+        var evt = _trigger.MapEvent(notification).ToList()[0].ShouldBeOfType<TriggerEvent<FormRecordOutput>>();
+
+        evt.Output.Fields.ShouldNotBeNull();
+        evt.Output.Fields["email"].ShouldBe("a@b.com");
     }
 
     [Fact]

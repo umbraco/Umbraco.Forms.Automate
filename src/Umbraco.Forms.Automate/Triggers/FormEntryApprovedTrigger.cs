@@ -13,12 +13,13 @@ namespace Umbraco.Forms.Automate.Triggers;
     Icon = "icon-check",
     RequiredSections = [Constants.Sections.Forms])]
 public sealed class FormEntryApprovedTrigger
-    : NotificationTriggerBase<FormRecordTriggerSettings, FormRecordOutput, RecordApprovedNotification>
+    : DynamicFormRecordTriggerBase<RecordApprovedNotification>
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="FormEntryApprovedTrigger"/> class.
     /// </summary>
-    public FormEntryApprovedTrigger(TriggerInfrastructure infrastructure) : base(infrastructure)
+    public FormEntryApprovedTrigger(TriggerInfrastructure infrastructure, FormFieldResolver resolver)
+        : base(infrastructure, resolver)
     {
     }
 
@@ -44,6 +45,7 @@ public sealed class FormEntryApprovedTrigger
                 MemberKey = record.MemberKey,
                 Culture = record.Culture,
                 RecordFieldsJson = record.GenerateRecordDataAsJson(),
+                Fields = FormFieldResolver.ExtractFields(record),
             },
         };
     }
