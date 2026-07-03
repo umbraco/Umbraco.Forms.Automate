@@ -14,7 +14,7 @@ Umbraco.Forms.Automate is a provider package that connects [Umbraco Forms](https
 
 - **2 triggers** — react to form submission and entry approval events, with optional per-form filtering
 - **2 actions** — submit form entries programmatically and export entries from automation steps
-- **Rich trigger outputs** — form ID, form name, record ID, state, timestamps, IP, member key, culture, and field values as JSON
+- **Rich trigger outputs** — form ID, form name, record ID, state, timestamps, IP, member key, culture, the record's field values as JSON, plus the submitted form's fields exposed individually (bindable as `fields.<alias>` in the expression picker)
 - **Zero configuration** — triggers and actions are automatically discovered by Umbraco Automate
 
 ## Installation
@@ -41,7 +41,9 @@ Fire an Automate flow when something happens in Forms.
 | Form Submitted | A form entry is submitted |
 | Form Entry Approved | A form entry is approved |
 
-Both triggers produce a `FormRecordOutput` containing the form ID, form name, record ID, state, timestamps, IP, member key, culture, and field values as JSON. Triggers can be filtered to specific forms via the settings, or left blank to match all forms.
+Both triggers produce a `FormRecordOutput` containing the form ID, form name, record ID, state, timestamps, IP, member key, culture, and the record's field values as JSON. Triggers can be filtered to specific forms via the settings, or left blank to match all forms.
+
+When one or more forms are selected in the trigger settings, those forms' fields are additionally exposed as individual `fields.<alias>` outputs in the *Insert Binding Expression* picker (the union of the selected forms' fields), so you can bind directly to `fields.email`, `fields.name`, and so on. Leaving the filter blank matches all forms and lists only the standard outputs above; the submitted form's `fields.<alias>` values are still populated at runtime.
 
 ## Actions
 
