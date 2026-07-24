@@ -107,6 +107,35 @@ public class FormSubmittedTriggerTests
     }
 
     [Fact]
+    public void CanHandle_ReturnsTrue_WhenNoFormFilterConfigured()
+    {
+        var output = new FormRecordOutput { FormId = Guid.NewGuid() };
+
+        ((ITrigger)_trigger).CanHandle(output, null).ShouldBeTrue();
+        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings()).ShouldBeTrue();
+        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = "  " }).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void CanHandle_ReturnsTrue_WhenOutputFormIdIsInFilter()
+    {
+        var formId = Guid.NewGuid();
+        var output = new FormRecordOutput { FormId = formId };
+        var settings = new FormRecordTriggerSettings { FormIds = $"{Guid.NewGuid()},{formId}" };
+
+        ((ITrigger)_trigger).CanHandle(output, settings).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void CanHandle_ReturnsFalse_WhenOutputFormIdNotInFilter()
+    {
+        var output = new FormRecordOutput { FormId = Guid.NewGuid() };
+        var settings = new FormRecordTriggerSettings { FormIds = $"[\"{Guid.NewGuid()}\",\"{Guid.NewGuid()}\"]" };
+
+        ((ITrigger)_trigger).CanHandle(output, settings).ShouldBeFalse();
+    }
+
+    [Fact]
     public void MapEvent_SetsIdempotencyKey()
     {
         var form = new Form { Id = Guid.NewGuid(), Name = "Test" };
