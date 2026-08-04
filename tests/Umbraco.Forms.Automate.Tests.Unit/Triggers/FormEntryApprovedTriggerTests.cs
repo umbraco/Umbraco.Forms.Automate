@@ -48,4 +48,15 @@ public class FormEntryApprovedTriggerTests
         evt.Output.State.ShouldBe("Approved");
         evt.Output.FormName.ShouldBe("Approval Form");
     }
+
+    [Fact]
+    public void CanHandle_AppliesFormFilter()
+    {
+        var formId = Guid.NewGuid();
+        var output = new FormRecordOutput { FormId = formId };
+
+        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings()).ShouldBeTrue();
+        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = $"{formId}" }).ShouldBeTrue();
+        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = $"{Guid.NewGuid()}" }).ShouldBeFalse();
+    }
 }
