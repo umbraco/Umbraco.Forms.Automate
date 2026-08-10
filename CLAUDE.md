@@ -49,7 +49,7 @@ Both triggers inherit `DynamicFormRecordTriggerBase<TNotification>`
 Automate Core's `DynamicOutputNotificationTriggerBase<FormRecordTriggerSettings, TNotification>`. This is
 the mechanism behind the "Insert Binding Expression" picker showing `fields.<alias>` entries per form:
 
-- `FormFieldResolver.BuildOutputSchema(formIds)` (`Triggers/FormFieldResolver.cs:87-124`) builds a JSON
+- `FormFieldResolver.BuildOutputSchema(formIds)` (`Triggers/FormFieldResolver.cs:63-100`) builds a JSON
   Schema: the static `FormRecordOutput` envelope, plus — only when one or more forms are picked in the
   trigger's settings — a `fields` object unioning the picked forms' field aliases (camelCased, titled by
   the field's caption). This schema is what the flow-editor UI reads at *design time*.
@@ -271,11 +271,15 @@ source mapping restricting `Umbraco*` packages to the Umbraco feeds specifically
   branch) — a reminder that CMS-version-specific behavior/bug fixes discovered on `main` (v18) generally
   need a matching fix cherry-picked into `support/17.x`, even though the two lines otherwise diverge only
   in dependency version ranges.
-- `FormFieldResolver.ParseFormIds` (`Triggers/FormFieldResolver.cs:61-79`) tolerates both comma-separated
-  and JSON-array string storage for the trigger's form-picker value, because the underlying property
-  editor (`Forms.PropertyEditorUi.FormPicker.Multiple`) has been observed to persist either shape depending
-  on how the value was set/edited. Don't "simplify" this to a single format without confirming the
-  property editor's storage format hasn't been pinned down elsewhere.
+- **`FormRecordTriggerSettings.FormIds` must stay a collection.** It was originally a `string`, which made
+  Automate Core's `SingleValueArrayConverterFactory` throw on any selection of two or more forms — and
+  because trigger settings are resolved on the dispatch path, that one automation's exception stopped
+  *every* automation using a form trigger (umbraco/Umbraco.Automate#219). `FormIdsJsonConverter`
+  (`Triggers/FormIdsJsonConverter.cs`) reads the property, tolerating the JSON-array shape the picker
+  (`Forms.PropertyEditorUi.FormPicker.Multiple`) persists plus the single-value and comma-separated shapes
+  older automations may hold, and dropping unparseable tokens instead of throwing. Don't "simplify" it to
+  one shape, and don't make the property non-nullable — a non-nullable reference type gets an implicit
+  `[Required]` from `EditableModelSchemaBuilder`, which would mark an optional filter as required in the UI.
 - The demo site (`demo/`) deliberately opts *out* of central package management
   (`demo/Directory.Packages.props: ManagePackageVersionsCentrally=false`) and disables package validation
   (`demo/Directory.Build.props: EnablePackageValidation=false`) — its own `.csproj` pins concrete versions

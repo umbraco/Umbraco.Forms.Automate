@@ -52,8 +52,8 @@ public abstract class DynamicFormRecordTriggerBase<TNotification>
     /// <returns><c>true</c> if the event should fire for an automation with these settings.</returns>
     protected override bool CanHandle(FormRecordOutput output, FormRecordTriggerSettings? settings)
     {
-        var formIds = FormFieldResolver.ParseFormIds(settings?.FormIds);
+        var formIds = settings?.FormIds;
 
-        return formIds.Count == 0 || formIds.Contains(output.FormId);
+        return formIds is not { Count: > 0 } || formIds.Contains(output.FormId);
     }
 }

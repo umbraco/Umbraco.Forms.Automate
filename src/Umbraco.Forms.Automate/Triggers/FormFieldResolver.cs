@@ -55,47 +55,22 @@ public sealed class FormFieldResolver
     }
 
     /// <summary>
-    /// Parses the trigger's stored form-picker value into distinct form ids.
-    /// Tolerates comma-separated and JSON-array storage formats.
-    /// </summary>
-    public static IReadOnlyList<Guid> ParseFormIds(string? formIds)
-    {
-        if (string.IsNullOrWhiteSpace(formIds))
-        {
-            return [];
-        }
-
-        var ids = new List<Guid>();
-
-        foreach (var token in formIds.Split([',', '[', ']', '"', ' '], StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (Guid.TryParse(token, out var id) && !ids.Contains(id))
-            {
-                ids.Add(id);
-            }
-        }
-
-        return ids;
-    }
-
-    /// <summary>
     /// Builds the output JSON Schema for the binding-expression picker: the static
     /// envelope, with a <c>fields</c> object listing the union of the picked forms'
     /// fields (keyed by camel-cased alias). When no forms are picked, only the
     /// envelope is returned.
     /// </summary>
-    public JsonSchema BuildOutputSchema(string? formIds)
+    public JsonSchema BuildOutputSchema(IReadOnlyList<Guid>? formIds)
     {
         var envelope = new JsonSchemaBuilder().FromType<FormRecordOutput>(EnvelopeConfig).Build();
 
-        var ids = ParseFormIds(formIds);
-        if (ids.Count == 0)
+        if (formIds is not { Count: > 0 })
         {
             return envelope;
         }
 
         var fieldProperties = new Dictionary<string, JsonSchema>();
-        foreach (var field in _formService.Get([.. ids]).SelectMany(form => form.AllFields))
+        foreach (var field in _formService.Get([.. formIds]).SelectMany(form => form.AllFields))
         {
             if (string.IsNullOrWhiteSpace(field.Alias))
             {
