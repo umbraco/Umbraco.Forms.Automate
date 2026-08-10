@@ -113,7 +113,7 @@ public class FormSubmittedTriggerTests
 
         ((ITrigger)_trigger).CanHandle(output, null).ShouldBeTrue();
         ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings()).ShouldBeTrue();
-        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = "  " }).ShouldBeTrue();
+        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = [] }).ShouldBeTrue();
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class FormSubmittedTriggerTests
     {
         var formId = Guid.NewGuid();
         var output = new FormRecordOutput { FormId = formId };
-        var settings = new FormRecordTriggerSettings { FormIds = $"{Guid.NewGuid()},{formId}" };
+        var settings = new FormRecordTriggerSettings { FormIds = [Guid.NewGuid(), formId] };
 
         ((ITrigger)_trigger).CanHandle(output, settings).ShouldBeTrue();
     }
@@ -130,7 +130,7 @@ public class FormSubmittedTriggerTests
     public void CanHandle_ReturnsFalse_WhenOutputFormIdNotInFilter()
     {
         var output = new FormRecordOutput { FormId = Guid.NewGuid() };
-        var settings = new FormRecordTriggerSettings { FormIds = $"[\"{Guid.NewGuid()}\",\"{Guid.NewGuid()}\"]" };
+        var settings = new FormRecordTriggerSettings { FormIds = [Guid.NewGuid(), Guid.NewGuid()] };
 
         ((ITrigger)_trigger).CanHandle(output, settings).ShouldBeFalse();
     }

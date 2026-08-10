@@ -86,46 +86,6 @@ public class FormFieldResolverTests
     public void ExtractFields_EmptyRecord_YieldsEmpty()
         => FormFieldResolver.ExtractFields(RecordWith()).ShouldBeEmpty();
 
-    // --- ParseFormIds ---
-
-    [Fact]
-    public void ParseFormIds_Null_IsEmpty()
-        => FormFieldResolver.ParseFormIds(null).ShouldBeEmpty();
-
-    [Fact]
-    public void ParseFormIds_Blank_IsEmpty()
-        => FormFieldResolver.ParseFormIds("   ").ShouldBeEmpty();
-
-    [Fact]
-    public void ParseFormIds_SingleGuid_IsParsed()
-    {
-        var id = Guid.NewGuid();
-
-        FormFieldResolver.ParseFormIds(id.ToString()).ShouldBe(new[] { id });
-    }
-
-    [Fact]
-    public void ParseFormIds_CommaSeparated_AreParsed()
-    {
-        var a = Guid.NewGuid();
-        var b = Guid.NewGuid();
-
-        FormFieldResolver.ParseFormIds($"{a},{b}").ShouldBe(new[] { a, b });
-    }
-
-    [Fact]
-    public void ParseFormIds_JsonArray_AreParsed()
-    {
-        var a = Guid.NewGuid();
-        var b = Guid.NewGuid();
-
-        FormFieldResolver.ParseFormIds($"[\"{a}\",\"{b}\"]").ShouldBe(new[] { a, b });
-    }
-
-    [Fact]
-    public void ParseFormIds_Garbage_IsEmpty()
-        => FormFieldResolver.ParseFormIds("not-a-guid").ShouldBeEmpty();
-
     // --- BuildOutputSchema ---
 
     [Fact]
@@ -150,7 +110,7 @@ public class FormFieldResolverTests
     public void BuildOutputSchema_OneForm_ExposesFieldsByCamelCaseAliasWithCaption()
     {
         var form = FormWith(Guid.NewGuid(), FormField("EmailAddress", "Email address"));
-        var schema = ResolverWith(form).BuildOutputSchema(form.Id.ToString());
+        var schema = ResolverWith(form).BuildOutputSchema([form.Id]);
 
         var fields = FieldProperties(schema);
         fields!.Keys.ShouldContain("emailAddress");
@@ -163,7 +123,7 @@ public class FormFieldResolverTests
         var contact = FormWith(Guid.NewGuid(), FormField("name", "Name"), FormField("email", "Email"));
         var newsletter = FormWith(Guid.NewGuid(), FormField("name", "Name"), FormField("company", "Company"));
         var schema = ResolverWith(contact, newsletter)
-            .BuildOutputSchema($"{contact.Id},{newsletter.Id}");
+            .BuildOutputSchema([contact.Id, newsletter.Id]);
 
         var fields = FieldProperties(schema);
         fields!.Keys.ShouldBe(new[] { "name", "email", "company" }, ignoreOrder: true);
