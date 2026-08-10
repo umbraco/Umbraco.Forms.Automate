@@ -56,7 +56,7 @@ public class FormEntryApprovedTriggerTests
         var output = new FormRecordOutput { FormId = formId };
 
         ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings()).ShouldBeTrue();
-        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = $"{formId}" }).ShouldBeTrue();
-        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = $"{Guid.NewGuid()}" }).ShouldBeFalse();
+        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = [formId] }).ShouldBeTrue();
+        ((ITrigger)_trigger).CanHandle(output, new FormRecordTriggerSettings { FormIds = [Guid.NewGuid()] }).ShouldBeFalse();
     }
 }
