@@ -15,6 +15,7 @@ Umbraco.Forms.Automate is a provider package that connects [Umbraco Forms](https
 - **2 triggers** — react to form submission and entry approval events, with optional per-form filtering
 - **2 actions** — submit form entries programmatically and export entries from automation steps
 - **Rich trigger outputs** — form ID, form name, record ID, state, timestamps, IP, member key, culture, the record's field values as JSON, plus the submitted form's fields exposed individually (bindable as `fields.<alias>` in the expression picker)
+- **Sensitive fields stay in Forms** — any field marked as containing sensitive data is omitted from trigger output
 - **Zero configuration** — triggers and actions are automatically discovered by Umbraco Automate
 
 ## Installation
@@ -42,6 +43,8 @@ Fire an Automate flow when something happens in Forms.
 | Form Entry Approved | A form entry is approved |
 
 Both triggers produce a `FormRecordOutput` containing the form ID, form name, record ID, state, timestamps, IP, member key, culture, and the record's field values as JSON. Triggers can be filtered to specific forms via the settings, or left blank to match all forms.
+
+Fields marked in Forms as containing sensitive data are **excluded** from the trigger output — from `fields.<alias>`, from `recordFieldsJson`, and from the fields advertised in the *Insert Binding Expression* picker. Automate persists trigger and step payloads in its own tables with their own retention, so sensitive values are filtered before the event is written rather than after.
 
 When one or more forms are selected in the trigger settings, those forms' fields are additionally exposed as individual `fields.<alias>` outputs in the *Insert Binding Expression* picker (the union of the selected forms' fields), so you can bind directly to `fields.email`, `fields.name`, and so on. Leaving the filter blank matches all forms and lists only the standard outputs above; the submitted form's `fields.<alias>` values are still populated at runtime.
 
