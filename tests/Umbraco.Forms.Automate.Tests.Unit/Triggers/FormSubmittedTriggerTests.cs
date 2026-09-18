@@ -136,6 +136,44 @@ public class FormSubmittedTriggerTests
     }
 
     [Fact]
+    public void MapEvent_OmitsSensitiveFieldsFromOutput()
+    {
+        var email = new Field { Id = Guid.NewGuid(), Alias = "email" };
+        var nationalId = new Field { Id = Guid.NewGuid(), Alias = "nationalId", ContainsSensitiveData = true };
+
+        var form = new Form
+        {
+            Id = Guid.NewGuid(),
+            Name = "Contact Form",
+            Pages =
+            [
+                new Page
+                {
+                    FieldSets =
+                    [
+                        new FieldSet { Containers = [new FieldsetContainer { Fields = [email, nationalId] }] },
+                    ],
+                },
+            ],
+        };
+
+        var record = new Record { UniqueId = Guid.NewGuid(), Form = form.Id };
+        record.RecordFields[Guid.NewGuid()] = new RecordField(email) { Values = { "a@b.com" } };
+        record.RecordFields[Guid.NewGuid()] = new RecordField(nationalId) { Values = { "123456" } };
+
+        var notification = new RecordSubmittedNotification(record, new EventMessages(), form);
+
+        var evt = _trigger.MapEvent(notification).ToList()[0].ShouldBeOfType<TriggerEvent<FormRecordOutput>>();
+
+        evt.Output.Fields.ShouldNotBeNull();
+        evt.Output.Fields.Keys.ShouldBe(["email"]);
+
+        var recordFieldsJson = evt.Output.RecordFieldsJson.ShouldNotBeNull();
+        recordFieldsJson.ShouldContain("a@b.com");
+        recordFieldsJson.ShouldNotContain("123456");
+    }
+
+    [Fact]
     public void MapEvent_SetsIdempotencyKey()
     {
         var form = new Form { Id = Guid.NewGuid(), Name = "Test" };

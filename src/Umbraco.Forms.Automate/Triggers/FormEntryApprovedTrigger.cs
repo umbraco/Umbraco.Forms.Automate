@@ -26,27 +26,6 @@ public sealed class FormEntryApprovedTrigger
     /// <inheritdoc />
     public override IEnumerable<TriggerEvent> MapEvent(RecordApprovedNotification notification)
     {
-        var record = notification.Record;
-        var form = notification.Form;
-
-        yield return new TriggerEvent<FormRecordOutput>
-        {
-            TriggerAlias = Alias,
-            InitiatorType = "system",
-            IdempotencyKey = GenerateIdempotencyKey(record.UniqueId, notification.Record.Id),
-            Output = new FormRecordOutput
-            {
-                FormId = form.Id,
-                FormName = form.Name,
-                RecordUniqueId = record.UniqueId,
-                State = record.State.ToString(),
-                Created = record.Created,
-                Ip = record.IP,
-                MemberKey = record.MemberKey,
-                Culture = record.Culture,
-                RecordFieldsJson = record.GenerateRecordDataAsJson(),
-                Fields = FormFieldResolver.ExtractFields(record),
-            },
-        };
+        yield return CreateEvent(notification.Record, notification.Form);
     }
 }
