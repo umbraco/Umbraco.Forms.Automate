@@ -9,6 +9,7 @@ using Umbraco.Forms.Core.Models;
 using Umbraco.Forms.Core.Services;
 using Umbraco.Forms.Core.Services.Notifications;
 using Record = Umbraco.Forms.Core.Persistence.Dtos.Record;
+using RecordField = Umbraco.Forms.Core.Persistence.Dtos.RecordField;
 
 namespace Umbraco.Forms.Automate.Tests.Unit.Triggers;
 
@@ -47,6 +48,44 @@ public class FormEntryApprovedTriggerTests
         evt.TriggerAlias.ShouldBe("umbracoForms.formEntryApproved");
         evt.Output.State.ShouldBe("Approved");
         evt.Output.FormName.ShouldBe("Approval Form");
+    }
+
+    [Fact]
+    public void MapEvent_OmitsSensitiveFieldsFromOutput()
+    {
+        var email = new Field { Id = Guid.NewGuid(), Alias = "email" };
+        var nationalId = new Field { Id = Guid.NewGuid(), Alias = "nationalId", ContainsSensitiveData = true };
+
+        var form = new Form
+        {
+            Id = Guid.NewGuid(),
+            Name = "Approval Form",
+            Pages =
+            [
+                new Page
+                {
+                    FieldSets =
+                    [
+                        new FieldSet { Containers = [new FieldsetContainer { Fields = [email, nationalId] }] },
+                    ],
+                },
+            ],
+        };
+
+        var record = new Record { UniqueId = Guid.NewGuid(), Form = form.Id, State = FormState.Approved };
+        record.RecordFields[Guid.NewGuid()] = new RecordField(email) { Values = { "a@b.com" } };
+        record.RecordFields[Guid.NewGuid()] = new RecordField(nationalId) { Values = { "123456" } };
+
+        var notification = new RecordApprovedNotification(record, new EventMessages(), form);
+
+        var evt = _trigger.MapEvent(notification).ToList()[0].ShouldBeOfType<TriggerEvent<FormRecordOutput>>();
+
+        evt.Output.Fields.ShouldNotBeNull();
+        evt.Output.Fields.Keys.ShouldBe(["email"]);
+
+        var recordFieldsJson = evt.Output.RecordFieldsJson.ShouldNotBeNull();
+        recordFieldsJson.ShouldContain("a@b.com");
+        recordFieldsJson.ShouldNotContain("123456");
     }
 
     [Fact]
