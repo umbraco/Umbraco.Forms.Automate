@@ -20,11 +20,8 @@ public class FormFieldResolverTests
         return record;
     }
 
-    private static RecordField RecordFieldWith(string alias, params object[] values)
-        => new(new Field { Id = Guid.NewGuid(), Alias = alias })
-        {
-            Values = values.ToList(),
-        };
+    private static RecordField RecordFieldFor(Field field, params object[] values)
+        => new(field) { Values = values.ToList() };
 
     private static Form FormWith(Guid id, params Field[] fields)
         => new()
@@ -42,8 +39,8 @@ public class FormFieldResolverTests
             },
         };
 
-    private static Field FormField(string alias, string caption)
-        => new() { Id = Guid.NewGuid(), Alias = alias, Caption = caption };
+    private static Field FormField(string alias, string caption, bool containsSensitiveData = false)
+        => new() { Id = Guid.NewGuid(), Alias = alias, Caption = caption, ContainsSensitiveData = containsSensitiveData };
 
     private static FormFieldResolver ResolverWith(params Form[] forms)
     {
@@ -61,7 +58,10 @@ public class FormFieldResolverTests
     [Fact]
     public void ExtractFields_KeysByAlias_WithScalarValue()
     {
-        var result = FormFieldResolver.ExtractFields(RecordWith(RecordFieldWith("email", "a@b.com")));
+        var email = FormField("email", "Email");
+        var result = FormFieldResolver.ExtractFields(
+            RecordWith(RecordFieldFor(email, "a@b.com")),
+            FormWith(Guid.NewGuid(), email));
 
         result["email"].ShouldBe("a@b.com");
     }
@@ -69,7 +69,10 @@ public class FormFieldResolverTests
     [Fact]
     public void ExtractFields_CamelCasesTheAlias()
     {
-        var result = FormFieldResolver.ExtractFields(RecordWith(RecordFieldWith("FullName", "Alice")));
+        var fullName = FormField("FullName", "Full name");
+        var result = FormFieldResolver.ExtractFields(
+            RecordWith(RecordFieldFor(fullName, "Alice")),
+            FormWith(Guid.NewGuid(), fullName));
 
         result.Keys.ShouldContain("fullName");
     }
@@ -77,14 +80,71 @@ public class FormFieldResolverTests
     [Fact]
     public void ExtractFields_MultiValueField_YieldsArray()
     {
-        var result = FormFieldResolver.ExtractFields(RecordWith(RecordFieldWith("colours", "red", "green")));
+        var colours = FormField("colours", "Colours");
+        var result = FormFieldResolver.ExtractFields(
+            RecordWith(RecordFieldFor(colours, "red", "green")),
+            FormWith(Guid.NewGuid(), colours));
 
         result["colours"].ShouldBe(new object[] { "red", "green" });
     }
 
     [Fact]
     public void ExtractFields_EmptyRecord_YieldsEmpty()
-        => FormFieldResolver.ExtractFields(RecordWith()).ShouldBeEmpty();
+        => FormFieldResolver.ExtractFields(RecordWith(), FormWith(Guid.NewGuid())).ShouldBeEmpty();
+
+    [Fact]
+    public void ExtractFields_OmitsFieldsMarkedAsSensitive()
+    {
+        var email = FormField("email", "Email");
+        var nationalId = FormField("nationalId", "National ID", containsSensitiveData: true);
+        var record = RecordWith(RecordFieldFor(email, "a@b.com"), RecordFieldFor(nationalId, "123456"));
+
+        var result = FormFieldResolver.ExtractFields(record, FormWith(Guid.NewGuid(), email, nationalId));
+
+        result.Keys.ShouldBe(["email"]);
+        result["email"].ShouldBe("a@b.com");
+    }
+
+    [Fact]
+    public void ExtractFields_KeepsFieldsWhenNoneAreSensitive()
+    {
+        var email = FormField("email", "Email");
+        var name = FormField("name", "Name");
+        var record = RecordWith(RecordFieldFor(email, "a@b.com"), RecordFieldFor(name, "Alice"));
+
+        var result = FormFieldResolver.ExtractFields(record, FormWith(Guid.NewGuid(), email, name));
+
+        result.Keys.ShouldBe(["email", "name"], ignoreOrder: true);
+    }
+
+    // --- GenerateRecordFieldsJson ---
+
+    [Fact]
+    public void GenerateRecordFieldsJson_OmitsFieldsMarkedAsSensitive()
+    {
+        var email = FormField("email", "Email");
+        var nationalId = FormField("nationalId", "National ID", containsSensitiveData: true);
+        var record = RecordWith(RecordFieldFor(email, "a@b.com"), RecordFieldFor(nationalId, "123456"));
+
+        var json = FormFieldResolver.GenerateRecordFieldsJson(record, FormWith(Guid.NewGuid(), email, nationalId));
+
+        json.ShouldContain(email.Id.ToString());
+        json.ShouldContain("a@b.com");
+        json.ShouldNotContain(nationalId.Id.ToString());
+        json.ShouldNotContain("123456");
+    }
+
+    [Fact]
+    public void GenerateRecordFieldsJson_KeepsFieldsWhenNoneAreSensitive()
+    {
+        var email = FormField("email", "Email");
+        var record = RecordWith(RecordFieldFor(email, "a@b.com"));
+
+        var json = FormFieldResolver.GenerateRecordFieldsJson(record, FormWith(Guid.NewGuid(), email));
+
+        json.ShouldContain(email.Id.ToString());
+        json.ShouldContain("a@b.com");
+    }
 
     // --- BuildOutputSchema ---
 
@@ -127,5 +187,19 @@ public class FormFieldResolverTests
 
         var fields = FieldProperties(schema);
         fields!.Keys.ShouldBe(new[] { "name", "email", "company" }, ignoreOrder: true);
+    }
+
+    [Fact]
+    public void BuildOutputSchema_OmitsFieldsMarkedAsSensitive()
+    {
+        var form = FormWith(
+            Guid.NewGuid(),
+            FormField("email", "Email"),
+            FormField("nationalId", "National ID", containsSensitiveData: true));
+
+        var schema = ResolverWith(form).BuildOutputSchema([form.Id]);
+
+        var fields = FieldProperties(schema);
+        fields!.Keys.ShouldBe(["email"]);
     }
 }
