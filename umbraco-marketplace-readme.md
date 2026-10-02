@@ -5,11 +5,11 @@ Umbraco Forms triggers and actions for Umbraco Automate - react to form submissi
 ### Features
 
 - **2 Triggers** - React to form submission and entry approval events, with optional per-form filtering
-- **2 Actions** - Submit form entries programmatically and export entries (with optional approved-only filter and pagination) from automation steps
+- **3 Actions** - Submit form entries programmatically, export entries (with optional approved-only filter and pagination), and delete entries from automation steps
 - **Rich Trigger Outputs** - Form ID, form name, record ID, state, timestamps, IP, member key, culture, field values as JSON, plus the submitted form's fields exposed individually (bindable as `fields.<alias>` in the expression picker)
 - **Zero Configuration** - Triggers and actions are automatically discovered by Umbraco Automate
 
-Example: post to a channel when a form is submitted, or export entries on a schedule.
+Example: post to a channel when a form is submitted, export entries on a schedule, or delete spam entries as they arrive.
 
 ### Requirements
 

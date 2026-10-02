@@ -13,7 +13,7 @@ Umbraco.Forms.Automate is a provider package that connects [Umbraco Forms](https
 ## Key Features
 
 - **2 triggers** — react to form submission and entry approval events, with optional per-form filtering
-- **2 actions** — submit form entries programmatically and export entries from automation steps
+- **3 actions** — submit form entries programmatically, export entries, and delete entries (e.g. to remove spam) from automation steps
 - **Rich trigger outputs** — form ID, form name, record ID, state, timestamps, IP, member key, culture, the record's field values as JSON, plus the submitted form's fields exposed individually (bindable as `fields.<alias>` in the expression picker)
 - **Sensitive fields stay in Forms** — any field marked as containing sensitive data is omitted from trigger output
 - **Zero configuration** — triggers and actions are automatically discovered by Umbraco Automate
@@ -56,6 +56,19 @@ Run Forms operations from an Automate flow.
 |---|---|
 | Submit Form | Programmatically submits a form entry with field values |
 | Export Form Entries | Exports form entries as a JSON array (with optional approved-only filter and pagination) |
+| Delete Form Entry | Permanently deletes a single form entry, running the form's "on delete" workflows |
+
+### Delete Form Entry permissions
+
+Deleting an entry can't be undone, so Delete Form Entry applies the same Forms permissions as the backoffice. Automate runs actions as the workspace's service account, and that account needs:
+
+- access to the **Forms** section,
+- the Forms **Delete entries** permission, and
+- access to the form the entry belongs to.
+
+Forms grants **Delete entries** to no one by default — not even administrators — so give it to the service account (or its user group) explicitly. If any of these is missing, the step fails with an authorisation error and nothing is deleted.
+
+A typical use is removing spam: start from **Form Submitted**, decide whether the entry is spam, then add Delete Form Entry. Leave its **Form** and **Entry ID** settings blank and it deletes the entry that started the run, whichever of the trigger's forms it came from. Pick a form and set (or bind) the entry ID to delete a different entry. The step's `deleted` output is `false` when there was no stored entry to delete (for example, the form doesn't store entries) or when one of the form's "on delete" workflows cancelled the deletion.
 
 ## How It Works
 
