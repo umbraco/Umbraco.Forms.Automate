@@ -15,15 +15,31 @@ pr:
       - main
       - dev
 
+resources:
+  repositories:
+    - repository: build
+      type: github
+      name: umbraco/Umbraco.Build
+      endpoint: umbraco
+
 parameters:
   - name: cache_nuget
     displayName: Cache NuGet packages
     type: boolean
     default: true
-  - name: runSbom
-    displayName: Generate & upload SBOM
+  - name: sbom_generate
+    displayName: Generate SBOM and check licenses (no upload off release/hotfix)
     type: boolean
-    default: true
+    default: false # SBOM is still generated for release/* and hotfix/* branches
+
+# Read by the shared Umbraco.Build SBOM stage
+variables:
+  - name: solution
+    value: Umbraco.Forms.Automate.slnx
+  - name: productName
+    value: Umbraco.Forms.Automate
+  - name: vmImage
+    value: ubuntu-latest
 
 stages:
   - stage: Build
@@ -32,9 +48,15 @@ stages:
       - template: .devops/build-and-pack.yml
         parameters:
           solution: Umbraco.Forms.Automate.slnx
-          productName: Umbraco.Forms.Automate
           cache_nuget: ${{ parameters.cache_nuget }}
-          runSbom: ${{ parameters.runSbom }}
+
+  # umbraco-sbom SBOM + license policy check, in parallel with Build. A policy violation fails the run.
+  # Only release/hotfix builds upload to Dependency-Track, as "Umbraco.Forms.Automate v<major>".
+  - template: devops/stages/sbom.yml@build
+    parameters:
+      sbom_generate: ${{ parameters.sbom_generate }}
+      sbom_upload: ${{ or(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/hotfix/')) }}
+      sbom_dt_variable_group: dependency-track
 
   - stage: Test
     dependsOn: Build
