@@ -231,10 +231,13 @@ branches following `fix/<short-description>` and backport branches following
 concrete example this pattern came from.
 
 **CI** (`azure-pipelines.yml` → `.devops/build-and-pack.yml` + `.devops/test.yml`): triggers on push to
-`main`, `dev`, `release/*`, `hotfix/*`, `feature/*`. Two stages only — `Build` (restore, `nbgv cloud` to
-stamp the version, build, pack, publish the `.nupkg` + full source tree as pipeline artifacts, optional
-CycloneDX SBOM generation/upload to Dependency-Track) and `Test` (downloads the `build_output` artifact,
-runs `dotnet test` on a Windows/Linux/macOS matrix). **There is no Publish stage** — pushing the built
+`main`, `dev`, `release/*`, `hotfix/*`, `feature/*`. Stages — `Build` (restore, `nbgv cloud` to
+stamp the version, build, pack, publish the `.nupkg` + full source tree as pipeline artifacts) and `Test`
+(downloads the `build_output` artifact, runs `dotnet test` on a Windows/Linux/macOS matrix), plus
+`GenerateSBOM` from the shared `umbraco/Umbraco.Build` repo (`devops/stages/sbom.yml`) on
+`release/*`/`hotfix/*` only: `umbraco-sbom` with a license policy check (a violation fails the run),
+uploaded to Dependency-Track as `Umbraco.Forms.Automate v<major>`. Tick **Generate SBOM and check
+licenses** at queue time to check another branch without uploading. **There is no Publish stage** — pushing the built
 package to the MyGet feed is a manual step a human does after CI goes green. Nothing in this repo's
 automation pushes packages anywhere.
 
