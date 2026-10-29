@@ -166,8 +166,9 @@ Two different test styles are used depending on what's under test — don't mix 
 builders, so these ad-hoc helpers are the closest thing to a fixture. Reuse/extend them rather than
 constructing `Form`/`Record` graphs inline in new tests.
 
-CI runs the full test project three times — Windows, Linux, macOS — via a matrix strategy
-(`.devops/test.yml:8-15`), against the artifact built once in the `Build` stage (not rebuilt per-OS). Keep
+CI runs the full test project three times — Windows, Linux, macOS — via a matrix strategy for `main`,
+`release/*` and `hotfix/*` builds (Linux only for PRs and feature branches), against the artifact built
+once in the `BuildAndPack` stage (not rebuilt per-OS). Keep
 tests OS-agnostic (no hardcoded path separators, no OS-specific line endings assumptions).
 
 ## Error Handling
@@ -230,24 +231,29 @@ branches following `fix/<short-description>` and backport branches following
 `backport/<short-description>-<major>` (e.g. `backport/ip-field-alias-17`) — see **Edge Cases** for the
 concrete example this pattern came from.
 
-**CI** (`azure-pipelines.yml` → `.devops/build-and-pack.yml` + `.devops/test.yml`): triggers on push to
-`main`, `dev`, `release/*`, `hotfix/*`, `feature/*`. Stages — `Build` (restore, `nbgv cloud` to
-stamp the version, build, pack, publish the `.nupkg` + full source tree as pipeline artifacts) and `Test`
-(downloads the `build_output` artifact, runs `dotnet test` on a Windows/Linux/macOS matrix), plus
-`GenerateSBOM` from the shared `umbraco/Umbraco.Build` repo (`devops/stages/sbom.yml`) on
-`release/*`/`hotfix/*` only: `umbraco-sbom` with a license policy check (a violation fails the run),
-uploaded to Dependency-Track as `Umbraco.Forms.Automate v<major>`. Tick **Generate SBOM and check
-licenses** at queue time to check another branch without uploading. **There is no Publish stage** — pushing the built
-package to the MyGet feed is a manual step a human does after CI goes green. Nothing in this repo's
-automation pushes packages anywhere.
+**CI** (`azure-pipelines.yml`, which extends `devops/templates/azure-pipelines-template.yml` from the
+shared `umbraco/Umbraco.Build` repo): triggers on push to `main`, `dev`, `release/*`, `hotfix/*`,
+`feature/*`. Stages — `BuildAndPack` (restore, build with Nerdbank.GitVersioning stamping the version,
+pack, publish the `.nupkg` + full source tree as pipeline artifacts) and `Test` (downloads the
+`build_output` artifact, runs `dotnet test`), plus `GenerateSBOM` on `release/*`/`hotfix/*` only:
+`umbraco-sbom` with a license policy check (a violation fails the run), uploaded to Dependency-Track as
+`Umbraco.Forms.Automate v<major>`. Tick **Generate SBOM and check licenses** at queue time to check
+another branch without uploading.
+
+**Publishing** happens on `release/*` and `hotfix/*` builds only: `Prerelease` pushes the package to the
+MyGet pre-releases feed, and `Release` pushes it to NuGet.org after someone approves "Wait for manual
+approval" in the run. Every other branch skips both — `main` is a public release in `version.json` too,
+so `azure-pipelines.yml` gates them by branch rather than leaving the template's `auto`. The queue-time
+**Prerelease to MyGet** / **Release to NuGet.org** parameters override this (e.g. `nightly` pushes a
+`main` build to the MyGet nightly feed).
 
 **Release process** — two Claude Code skills automate the mechanics precisely; read them rather than this
 summary for exact commands:
 - `.claude/skills/release-management/SKILL.md` — cuts a `release/YYYY.MM.N` branch from `main` or
   `support/17.x`, bumps `Directory.Packages.props`'s `Umbraco.Automate*` ranges and `version.json` to the
   target major's stable floor (`[X.0.0, X.999.999)`).
-- `.claude/skills/post-release-cleanup/SKILL.md` — run only after CI is green **and** a human has manually
-  confirmed the MyGet push; merges `--no-ff` back into the target branch, tags `release-<version>`, creates
+- `.claude/skills/post-release-cleanup/SKILL.md` — run only after the release build has published to
+  MyGet and NuGet.org; merges `--no-ff` back into the target branch, tags `release-<version>`, creates
   a GitHub Release via `gh release create <tag> --target <branch> --generate-notes`, patch-bumps
   `version.json` on the target branch for next-cycle nightlies, and deletes the release branch
   (local + remote).

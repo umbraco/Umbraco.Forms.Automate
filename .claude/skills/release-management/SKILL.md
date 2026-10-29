@@ -69,9 +69,10 @@ not a separate counter per line.
 
    Next steps:
    - Push: git push -u origin release/2026.07.3
-   - CI (azure-pipelines.yml) validates on push (Build + Test + SBOM)
-   - Once green, manually push the package to MyGet
-   - Then run /post-release-cleanup to merge back, tag, and create the GitHub Release
+   - CI (azure-pipelines.yml, the shared Umbraco.Build template) runs on push: Build + Test + SBOM,
+     then Prerelease pushes the package to MyGet and Release waits for approval
+   - Approve "Wait for manual approval" in the run's Release stage to push to NuGet.org
+   - Once both publish stages are green, run /post-release-cleanup to merge back, tag, and create the GitHub Release
    ```
 
 ## Notes
