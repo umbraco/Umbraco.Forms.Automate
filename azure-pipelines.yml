@@ -23,44 +23,46 @@ resources:
       endpoint: umbraco
 
 parameters:
-  - name: cache_nuget
-    displayName: Cache NuGet packages
-    type: boolean
-    default: true
+  - name: prerelease
+    displayName: Prerelease to MyGet
+    type: string
+    default: auto
+    values:
+      - auto # Only release/* and hotfix/* builds release to MyGet, otherwise skip
+      - prerelease # Release to MyGet pre-release feed, regardless of branch
+      - nightly # Release to MyGet nightly feed, regardless of branch
+      - skip # Skip releasing to MyGet, regardless of branch
+  - name: release
+    displayName: Release to NuGet.org
+    type: string
+    default: auto
+    values:
+      - auto # Only release/* and hotfix/* builds release to NuGet.org (after approval), otherwise skip
+      - public # Release to NuGet.org (after approval), regardless of branch
+      - skip # Skip releasing to NuGet.org, regardless of branch
   - name: sbom_generate
     displayName: Generate SBOM and check licenses (no upload off release/hotfix)
     type: boolean
     default: false # SBOM is still generated for release/* and hotfix/* branches
 
-# Read by the shared Umbraco.Build SBOM stage
-variables:
-  - name: solution
-    value: Umbraco.Forms.Automate.slnx
-  - name: productName
-    value: Umbraco.Forms.Automate
-  - name: vmImage
-    value: ubuntu-latest
-
-stages:
-  - stage: Build
-    displayName: Build & Pack
-    jobs:
-      - template: .devops/build-and-pack.yml
-        parameters:
-          solution: Umbraco.Forms.Automate.slnx
-          cache_nuget: ${{ parameters.cache_nuget }}
-
-  # umbraco-sbom SBOM + license policy check, in parallel with Build. A policy violation fails the run.
-  # Only release/hotfix builds upload to Dependency-Track, as "Umbraco.Forms.Automate v<major>".
-  - template: devops/stages/sbom.yml@build
-    parameters:
-      sbom_generate: ${{ parameters.sbom_generate }}
-      sbom_upload: ${{ or(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/hotfix/')) }}
-      sbom_dt_variable_group: dependency-track
-
-  - stage: Test
-    dependsOn: Build
-    jobs:
-      - template: .devops/test.yml
-        parameters:
-          solution: Umbraco.Forms.Automate.slnx
+extends:
+  template: devops/templates/azure-pipelines-template.yml@build
+  parameters:
+    product_name: Umbraco.Forms.Automate
+    solution: Umbraco.Forms.Automate.slnx
+    # version.json makes main a public release too, so the template's 'auto' would publish every
+    # main build. Keep 'auto' to release/* and hotfix/* branches and skip everywhere else.
+    ${{ if and(eq(parameters.prerelease, 'auto'), not(or(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/hotfix/')))) }}:
+      prerelease: skip
+    ${{ else }}:
+      prerelease: ${{ parameters.prerelease }}
+    ${{ if and(eq(parameters.release, 'auto'), not(or(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/hotfix/')))) }}:
+      release: skip
+    ${{ else }}:
+      release: ${{ parameters.release }}
+    # umbraco-sbom SBOM + license policy check, in parallel with BuildAndPack. A policy violation fails the run.
+    # Only release/hotfix builds upload to Dependency-Track, as "Umbraco.Forms.Automate v<major>".
+    sbom_generate: ${{ parameters.sbom_generate }}
+    sbom_upload: ${{ or(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/hotfix/')) }}
+    sbom_dt_variable_group: dependency-track
+    nuget_service_connection: NuGet (Umbraco.*.Automate only)
