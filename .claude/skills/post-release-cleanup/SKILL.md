@@ -1,21 +1,21 @@
 ---
 name: post-release-cleanup
-description: Merges a released release/* branch back into main or support/17.x, tags the merge commit, creates the GitHub Release, bumps version.json for next-cycle nightlies, and deletes the release branch. Use after the release build is green AND the package has been manually pushed to MyGet.
+description: Merges a released release/* branch back into main or support/17.x, tags the merge commit, creates the GitHub Release, bumps version.json for next-cycle nightlies, and deletes the release branch. Use after the release build has published the package to MyGet and NuGet.org.
 allowed-tools: Bash, Read, Edit, AskUserQuestion
 ---
 
 # Post-Release Cleanup (satellite)
 
-Run this **after** the release branch's CI build is green **and** the package has been manually
-pushed to MyGet. This is the point where a version is actually shipped — nothing in git or CI observes
-the manual MyGet push directly, so tagging and creating the GitHub Release happen here, not on branch
-push or CI completion.
+Run this **after** the release branch's CI build has published the package: its Prerelease stage
+(MyGet) and its Release stage (NuGet.org, after a manual approval in the run) both succeeded. This is
+the point where a version is actually shipped, so tagging and creating the GitHub Release happen here,
+not on branch push.
 
 ## Workflow
 
-1. **Confirm the release actually shipped.** Ask the user (AskUserQuestion) to confirm the package for
-   this release branch was pushed to MyGet. If not confirmed, stop — do not tag or merge an unpublished
-   release.
+1. **Confirm the release actually shipped.** Ask the user (AskUserQuestion) to confirm the release
+   branch's build published to MyGet and NuGet.org (Prerelease and Release stages green). If not
+   confirmed, stop — do not tag or merge an unpublished release.
 
 2. **Identify the release branch and its target:**
    - `release/*` branches cut from `main` merge back into `main` (v18)
@@ -85,6 +85,6 @@ push or CI completion.
 - Always run from repository root.
 - This is a light version of the core Umbraco.Automate `post-release-cleanup` skill — no changelog
   files, no release manifest, no multi-product tag scanning (single product, one `version.json`).
-- Do not tag or create a release for a branch whose package was not actually confirmed on MyGet.
+- Do not tag or create a release for a branch whose package was not actually published.
 - If no `release/*` branch matches, or the merge conflicts, stop and report — do not force-resolve
   conflicts silently.
