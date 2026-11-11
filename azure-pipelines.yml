@@ -65,4 +65,3 @@ extends:
     sbom_generate: ${{ parameters.sbom_generate }}
     sbom_upload: ${{ or(startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/hotfix/')) }}
     sbom_dt_variable_group: dependency-track
-    nuget_service_connection: NuGet (Umbraco.*.Automate only)
