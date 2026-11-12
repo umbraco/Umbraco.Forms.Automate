@@ -27,18 +27,6 @@ public sealed class FormFieldResolver
     public FormFieldResolver(IFormService formService) => _formService = formService;
 
     /// <summary>
-    /// Extracts a submitted record's field values, keyed by camel-cased field alias.
-    /// Single-valued fields yield a scalar; multi-valued fields yield an array.
-    /// </summary>
-    /// <remarks>
-    /// This overload cannot tell which fields the form marks as sensitive, so it returns
-    /// every value. Use <see cref="ExtractFields(Record, Form)"/> instead.
-    /// </remarks>
-    [Obsolete("Use the overload taking the form, which omits fields marked as containing sensitive data. This overload returns every value and will be removed in a future major.")]
-    public static IReadOnlyDictionary<string, object?> ExtractFields(Record record)
-        => ExtractFields(record, sensitiveFieldIds: null);
-
-    /// <summary>
     /// Extracts a submitted record's field values, keyed by camel-cased field alias,
     /// omitting any field the form marks as containing sensitive data.
     /// Single-valued fields yield a scalar; multi-valued fields yield an array.

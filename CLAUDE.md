@@ -53,9 +53,10 @@ the mechanism behind the "Insert Binding Expression" picker showing `fields.<ali
   Schema: the static `FormRecordOutput` envelope, plus — only when one or more forms are picked in the
   trigger's settings — a `fields` object unioning the picked forms' field aliases (camelCased, titled by
   the field's caption). This schema is what the flow-editor UI reads at *design time*.
-- `FormFieldResolver.ExtractFields(record)` (`Triggers/FormFieldResolver.cs:32-55`) extracts the actual
-  submitted values at *runtime*, keyed the same way. Single-valued fields yield a scalar; multi-valued
-  fields (checkboxes etc.) yield an array.
+- `FormFieldResolver.ExtractFields(record, form)` (`Triggers/FormFieldResolver.cs`) extracts the actual
+  submitted values at *runtime*, keyed the same way, omitting fields the form marks as sensitive.
+  Single-valued fields yield a scalar; multi-valued fields (checkboxes etc.) yield an array. The
+  record-only overload was removed in v19; the form is always required.
 - These two methods must stay in lock-step: the schema advertises keys, `ExtractFields` must populate the
   same keys the same way (both camelCase the alias via `JsonNamingPolicy.CamelCase` /
   `PropertyNameResolvers.CamelCase` — do not switch one without the other).
