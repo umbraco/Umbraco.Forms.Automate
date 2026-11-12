@@ -211,6 +211,17 @@ public class ExportEntriesActionTests
     }
 
     [Fact]
+    public async Task DuplicateFieldId_DoesNotThrow_AndIsWithheld_WhenAnyCopyIsSensitive()
+    {
+        _security.SetupGet(s => s.CurrentUser).Returns(User(inSensitiveDataGroup: false));
+
+        var json = await ExportRecordWithSensitiveField(withNonSensitiveDuplicateOfSensitiveId: true);
+
+        json.ShouldNotContain("hunter2");
+        FieldValue(json, _sensitiveFieldId).ShouldBe("SENSITIVE");
+    }
+
+    [Fact]
     public async Task WithheldText_IsLocalizedInTheUsersLanguage()
     {
         SetupText("de-CH", "VERSTECKT");
@@ -271,6 +282,19 @@ public class ExportEntriesActionTests
         FieldValue(json, _plainFieldId).ShouldBe("visible");
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FieldsNoLongerOnTheForm_AreNotExported(bool hasSensitiveDataAccess)
+    {
+        _security.SetupGet(s => s.CurrentUser).Returns(User(inSensitiveDataGroup: hasSensitiveDataAccess));
+
+        var json = await ExportRecordWithSensitiveField();
+
+        json.ShouldNotContain("deleted-secret");
+        JsonNode.Parse(json)![0]!["fields"]!.AsObject().ContainsKey(_deletedFieldId.ToString()).ShouldBeFalse();
+    }
+
     [Fact]
     public async Task MemberKey_IsWithheld_WithoutSensitiveDataAccess_AndExported_WithIt()
     {
@@ -321,9 +345,15 @@ public class ExportEntriesActionTests
 
     private readonly Guid _sensitiveFieldId = Guid.NewGuid();
     private readonly Guid _plainFieldId = Guid.NewGuid();
+    private readonly Guid _deletedFieldId = Guid.NewGuid();
 
-    private async Task<string> ExportRecordWithSensitiveField()
+    private async Task<string> ExportRecordWithSensitiveField(bool withNonSensitiveDuplicateOfSensitiveId = false)
     {
+        // A non-sensitive copy placed before the sensitive one, so only an "any copy is sensitive" rule masks the id.
+        Field[] duplicate = withNonSensitiveDuplicateOfSensitiveId
+            ? [new Field { Id = _sensitiveFieldId, Alias = "secretCopy" }]
+            : [];
+
         _formService.Setup(s => s.Get(_formId)).Returns(new Form
         {
             Id = _formId,
@@ -341,6 +371,7 @@ public class ExportEntriesActionTests
                                 {
                                     Fields =
                                     [
+                                        .. duplicate,
                                         new Field { Id = _sensitiveFieldId, Alias = "secret", ContainsSensitiveData = true },
                                         new Field { Id = _plainFieldId, Alias = "plain" },
                                     ],
@@ -356,6 +387,7 @@ public class ExportEntriesActionTests
         record.MemberKey = "member-1";
         AddValue(record, _sensitiveFieldId, "secret", "hunter2");
         AddValue(record, _plainFieldId, "plain", "visible");
+        AddValue(record, _deletedFieldId, "deleted", "deleted-secret");
         SetupSearch(total: 1, record);
 
         var result = await Execute(new ExportEntriesSettings { FormId = _formId.ToString() });
