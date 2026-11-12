@@ -61,7 +61,7 @@ Run Forms operations from an Automate flow.
 
 Reads entries from the Forms database, so an entry submitted a moment ago is included. Each entry holds only the form's current fields; fields removed from the form are not exported.
 
-This matches the Forms backoffice export. For a field marked as containing sensitive data, the value is exported only when the automation's workspace service account is in the CMS *Sensitive data* user group. Otherwise the value reads `This value is hidden.` (or its translation) and `memberKey` is left out of the entry.
+This matches the Forms backoffice export. For a field marked as containing sensitive data, the value is exported only when the automation's workspace service account is in the CMS *Sensitive data* user group. Otherwise the value reads `This value is hidden.` (or its translation) and `memberKey` is `null`.
 
 Unlike the triggers, which leave sensitive fields out entirely, this action keeps the field and hides its value. Exported values pass through Automate's own tables and logs, so add the service account to the *Sensitive data* group only when that is acceptable.
 
