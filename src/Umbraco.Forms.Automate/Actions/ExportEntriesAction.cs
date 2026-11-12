@@ -2,8 +2,10 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Umbraco.Automate.Core.Actions;
 using Umbraco.Automate.Core.Runs;
+using Umbraco.Cms.Core.Configuration.Models;
 using Umbraco.Cms.Core.DependencyInjection;
 using Umbraco.Cms.Core.Models;
 using Umbraco.Cms.Core.Security;
@@ -32,11 +34,16 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
     // DateTime, which would silently drop older entries, so an explicit floor is passed instead.
     private static readonly DateTime EarliestCreated = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
+    // The CMS only ships "content/isSensitiveValue" in a few server-side language files (de-CH, fr-CH, it-CH), so
+    // the lookup misses for most cultures and the text service returns the key in brackets. This is used then.
+    private const string DefaultWithheldText = "This value is hidden.";
+
     private readonly IFormService _formService;
     private readonly IFormRecordSearcher _formRecordSearcher;
     private readonly IRecordStorage _recordStorage;
     private readonly IBackOfficeSecurityAccessor _backOfficeSecurityAccessor;
     private readonly ILocalizedTextService _localizedTextService;
+    private readonly GlobalSettings _globalSettings;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExportEntriesAction"/> class.
@@ -47,6 +54,7 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
     /// <param name="recordStorage">The record storage the entries are read from.</param>
     /// <param name="backOfficeSecurityAccessor">Used to find the current user, who decides whether sensitive values are exported.</param>
     /// <param name="localizedTextService">Provides the text that replaces a withheld sensitive value.</param>
+    /// <param name="globalSettings">Provides the default backoffice language, used when the user has none.</param>
     /// <param name="recordReaderService">
     /// Not used. It is only here so this constructor's parameters include the obsolete constructor's: the DI container
     /// throws an ambiguity error when a shorter constructor has a parameter the longest one lacks. It is optional
@@ -60,6 +68,7 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
         IRecordStorage recordStorage,
         IBackOfficeSecurityAccessor backOfficeSecurityAccessor,
         ILocalizedTextService localizedTextService,
+        IOptions<GlobalSettings> globalSettings,
         IRecordReaderService? recordReaderService = null)
         : base(infrastructure)
     {
@@ -68,6 +77,7 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
         _recordStorage = recordStorage;
         _backOfficeSecurityAccessor = backOfficeSecurityAccessor;
         _localizedTextService = localizedTextService;
+        _globalSettings = globalSettings.Value;
     }
 
     /// <summary>
@@ -75,7 +85,7 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
     /// </summary>
     /// <param name="infrastructure">The action infrastructure.</param>
     /// <param name="recordReaderService">No longer used: entries are read from the database, not the search index.</param>
-    [Obsolete("Use the constructor taking IFormService, IFormRecordSearcher, IRecordStorage, IBackOfficeSecurityAccessor and ILocalizedTextService. Will be removed in v21.0.0.")]
+    [Obsolete("Use the constructor taking IFormService, IFormRecordSearcher, IRecordStorage, IBackOfficeSecurityAccessor, ILocalizedTextService and IOptions<GlobalSettings>. Will be removed in v21.0.0.")]
     public ExportEntriesAction(
         ActionInfrastructure infrastructure,
         IRecordReaderService recordReaderService)
@@ -86,6 +96,7 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
             StaticServiceProvider.Instance.GetRequiredService<IRecordStorage>(),
             StaticServiceProvider.Instance.GetRequiredService<IBackOfficeSecurityAccessor>(),
             StaticServiceProvider.Instance.GetRequiredService<ILocalizedTextService>(),
+            StaticServiceProvider.Instance.GetRequiredService<IOptions<GlobalSettings>>(),
             recordReaderService)
     {
     }
@@ -113,7 +124,7 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
             ? form!.AllFields.Where(f => f.ContainsSensitiveData).Select(f => f.Id.ToString()).ToArray()
             : [];
         var withheldText = withholdSensitive && sensitiveFieldKeys.Length > 0
-            ? _localizedTextService.Localize("content", "isSensitiveValue", CultureInfo.CurrentCulture)
+            ? GetWithheldText()
             : string.Empty;
 
         // Build a JSON array directly, embedding the pre-serialized field data
@@ -149,6 +160,31 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
             ExportedCount = entriesArray.Count,
             EntriesJson = entriesArray.ToJsonString(),
         }));
+    }
+
+    // Localized in the current backoffice user's language, else the default backoffice language, not
+    // CultureInfo.CurrentCulture: a background run's thread culture is unrelated to any language file.
+    private string GetWithheldText()
+    {
+        var language = _backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Language;
+        if (string.IsNullOrWhiteSpace(language))
+        {
+            language = _globalSettings.DefaultUILanguage;
+        }
+
+        CultureInfo culture;
+        try
+        {
+            culture = UmbracoUserExtensions.GetUserCulture(language, _localizedTextService, _globalSettings);
+        }
+        catch (CultureNotFoundException)
+        {
+            culture = CultureInfo.GetCultureInfo("en-US");
+        }
+
+        // A missing key comes back as "[key]", which must never end up in the export.
+        var text = _localizedTextService.Localize("content", "isSensitiveValue", culture).Trim();
+        return text.Length == 0 || text == "[isSensitiveValue]" ? DefaultWithheldText : text;
     }
 
     private bool HasAccessToSensitiveData()

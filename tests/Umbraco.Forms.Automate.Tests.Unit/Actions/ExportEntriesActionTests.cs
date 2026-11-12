@@ -2,10 +2,12 @@ using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 using Umbraco.Automate.Core.Actions;
 using Umbraco.Automate.Core.Runs;
 using Umbraco.Automate.Core.Settings;
 using Umbraco.Automate.Testing;
+using Umbraco.Cms.Core.Configuration.Models;
 using Umbraco.Cms.Core.Models.Membership;
 using Umbraco.Cms.Core.Security;
 using Umbraco.Cms.Core.Services;
@@ -30,6 +32,8 @@ public class ExportEntriesActionTests
     private readonly Mock<IBackOfficeSecurity> _security = new();
     private readonly Mock<ILocalizedTextService> _localizedText = new();
 
+    private readonly GlobalSettings _globalSettings = new() { DefaultUILanguage = "en-US" };
+
     private readonly Guid _formId = Guid.NewGuid();
 
     public ExportEntriesActionTests()
@@ -39,6 +43,9 @@ public class ExportEntriesActionTests
         _localizedText
             .Setup(t => t.Localize("content", "isSensitiveValue", It.IsAny<CultureInfo>(), It.IsAny<IDictionary<string, string?>?>()))
             .Returns("SENSITIVE");
+        _localizedText
+            .Setup(t => t.ConvertToSupportedCultureWithRegionCode(It.IsAny<CultureInfo>()))
+            .Returns((CultureInfo c) => c);
     }
 
     [Fact]
@@ -204,6 +211,56 @@ public class ExportEntriesActionTests
     }
 
     [Fact]
+    public async Task WithheldText_IsLocalizedInTheUsersLanguage()
+    {
+        SetupText("de-CH", "VERSTECKT");
+        SetupText("en-US", "HIDDEN");
+        _security.SetupGet(s => s.CurrentUser).Returns(User(inSensitiveDataGroup: false, language: "de-CH"));
+
+        FieldValue(await ExportRecordWithSensitiveField(), _sensitiveFieldId).ShouldBe("VERSTECKT");
+    }
+
+    [Fact]
+    public async Task WithheldText_UsesTheDefaultBackofficeLanguage_WhenTheUserHasNoLanguage()
+    {
+        _globalSettings.DefaultUILanguage = "da-DK";
+        SetupText("da-DK", "SKJULT");
+        _security.SetupGet(s => s.CurrentUser).Returns(User(inSensitiveDataGroup: false, language: null));
+
+        FieldValue(await ExportRecordWithSensitiveField(), _sensitiveFieldId).ShouldBe("SKJULT");
+    }
+
+    [Fact]
+    public async Task WithheldText_UsesTheDefaultBackofficeLanguage_WhenThereIsNoUser()
+    {
+        _globalSettings.DefaultUILanguage = "da-DK";
+        SetupText("da-DK", "SKJULT");
+        _security.SetupGet(s => s.CurrentUser).Returns((IUser?)null);
+
+        FieldValue(await ExportRecordWithSensitiveField(), _sensitiveFieldId).ShouldBe("SKJULT");
+    }
+
+    [Fact]
+    public async Task WithheldText_IsNeverTheBracketedKey_WhenTheLanguageHasNoText()
+    {
+        // The text service answers "[key]" for a culture or key it does not know.
+        _localizedText
+            .Setup(t => t.Localize("content", "isSensitiveValue", It.IsAny<CultureInfo>(), It.IsAny<IDictionary<string, string?>?>()))
+            .Returns("[isSensitiveValue]");
+        _security.SetupGet(s => s.CurrentUser).Returns(User(inSensitiveDataGroup: false, language: "xx-unknown"));
+
+        var json = await ExportRecordWithSensitiveField();
+
+        json.ShouldNotContain("[isSensitiveValue]");
+        FieldValue(json, _sensitiveFieldId).ShouldBe("This value is hidden.");
+    }
+
+    private void SetupText(string culture, string text)
+        => _localizedText
+            .Setup(t => t.Localize("content", "isSensitiveValue", CultureInfo.GetCultureInfo(culture), It.IsAny<IDictionary<string, string?>?>()))
+            .Returns(text);
+
+    [Fact]
     public async Task SensitiveFieldValues_AreExported_WhenUserHasSensitiveDataAccess()
     {
         _security.SetupGet(s => s.CurrentUser).Returns(User(inSensitiveDataGroup: true));
@@ -244,6 +301,7 @@ public class ExportEntriesActionTests
 
         services.AddSingleton(_securityAccessor.Object);
         services.AddSingleton(_localizedText.Object);
+        services.AddSingleton(Options.Create(_globalSettings));
         services.Add(new ServiceDescriptor(typeof(ExportEntriesAction), typeof(ExportEntriesAction), ServiceLifetime.Transient));
 
         using var provider = services.BuildServiceProvider();
@@ -315,12 +373,13 @@ public class ExportEntriesActionTests
     private static string? FieldValue(string json, Guid fieldId)
         => JsonNode.Parse(json)![0]!["fields"]![fieldId.ToString()]?.GetValue<string>();
 
-    private static IUser User(bool inSensitiveDataGroup)
+    private static IUser User(bool inSensitiveDataGroup, string? language = "en-US")
     {
         var group = new Mock<IReadOnlyUserGroup>();
         group.SetupGet(g => g.Key).Returns(inSensitiveDataGroup ? Umbraco.Cms.Core.Constants.Security.SensitiveDataGroupKey : Guid.NewGuid());
         var user = new Mock<IUser>();
         user.SetupGet(u => u.Groups).Returns([group.Object]);
+        user.SetupGet(u => u.Language).Returns(language!);
         return user.Object;
     }
 
@@ -331,7 +390,8 @@ public class ExportEntriesActionTests
             .WithService(_searcher.Object)
             .WithService(_recordStorage.Object)
             .WithService(_securityAccessor.Object)
-            .WithService(_localizedText.Object);
+            .WithService(_localizedText.Object)
+            .WithService(Options.Create(_globalSettings));
 
         if (withRecordReader)
         {
