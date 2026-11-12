@@ -15,7 +15,7 @@ Umbraco.Forms.Automate is a provider package that connects [Umbraco Forms](https
 - **2 triggers** — react to form submission and entry approval events, with optional per-form filtering
 - **2 actions** — submit form entries programmatically and export entries from automation steps
 - **Rich trigger outputs** — form ID, form name, record ID, state, timestamps, IP, member key, culture, the record's field values as JSON, plus the submitted form's fields exposed individually (bindable as `fields.<alias>` in the expression picker)
-- **Sensitive fields stay in Forms** — any field marked as containing sensitive data is omitted from trigger output
+- **Sensitive data is respected** — triggers omit fields marked as containing sensitive data; Export Form Entries follows the Forms backoffice export rules (see [Export Form Entries](#export-form-entries))
 - **Zero configuration** — triggers and actions are automatically discovered by Umbraco Automate
 
 ## Installation
@@ -56,6 +56,14 @@ Run Forms operations from an Automate flow.
 |---|---|
 | Submit Form | Programmatically submits a form entry with field values |
 | Export Form Entries | Exports form entries as a JSON array (with optional approved-only filter and pagination) |
+
+### Export Form Entries
+
+Reads entries from the Forms database, so an entry submitted a moment ago is included. Each entry holds only the form's current fields; fields removed from the form are not exported.
+
+This matches the Forms backoffice export from Forms 18.0.6 (earlier 18.0.x versions still include the member in their own export). For a field marked as containing sensitive data, the value is exported only when the automation's workspace service account is in the CMS *Sensitive data* user group. Otherwise the value reads `This value is hidden.` (or its translation) and `memberKey` is `null`.
+
+Unlike the triggers, which leave sensitive fields out entirely, this action keeps the field and hides its value. Exported values pass through Automate's own tables and logs, so add the service account to the *Sensitive data* group only when that is acceptable.
 
 ## How It Works
 

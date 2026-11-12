@@ -1,7 +1,21 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Umbraco.Automate.Core.Actions;
 using Umbraco.Automate.Core.Runs;
+using Umbraco.Cms.Core.Configuration.Models;
+using Umbraco.Cms.Core.DependencyInjection;
+using Umbraco.Cms.Core.Models;
+using Umbraco.Cms.Core.Security;
+using Umbraco.Cms.Core.Services;
+using Umbraco.Extensions;
+using Umbraco.Forms.Core.Data.Storage;
+using Umbraco.Forms.Core.Enums;
+using Umbraco.Forms.Core.Models;
+using Umbraco.Forms.Core.Persistence.Dtos;
+using Umbraco.Forms.Core.Searchers;
 using Umbraco.Forms.Core.Services;
 
 namespace Umbraco.Forms.Automate.Actions;
@@ -16,17 +30,75 @@ namespace Umbraco.Forms.Automate.Actions;
     RequiredSections = [Constants.Sections.Forms])]
 public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, ExportEntriesOutput>
 {
-    private readonly IRecordReaderService _recordReaderService;
+    // The earliest Created date to query from. The searcher substitutes "the last 2000 days" for the default
+    // DateTime, which would silently drop older entries, so an explicit floor is passed instead.
+    private static readonly DateTime EarliestCreated = new(1900, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+    // The CMS only ships "content/isSensitiveValue" in a few server-side language files (de-CH, fr-CH, it-CH), so
+    // the lookup misses for most cultures and the text service returns the key in brackets. This is used then.
+    private const string DefaultWithheldText = "This value is hidden.";
+
+    private readonly IFormService _formService;
+    private readonly IFormRecordSearcher _formRecordSearcher;
+    private readonly IRecordStorage _recordStorage;
+    private readonly IBackOfficeSecurityAccessor _backOfficeSecurityAccessor;
+    private readonly ILocalizedTextService _localizedTextService;
+    private readonly GlobalSettings _globalSettings;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ExportEntriesAction"/> class.
     /// </summary>
+    /// <param name="infrastructure">The action infrastructure.</param>
+    /// <param name="formService">The form service.</param>
+    /// <param name="formRecordSearcher">The searcher used to page and filter entries in the database.</param>
+    /// <param name="recordStorage">The record storage the entries are read from.</param>
+    /// <param name="backOfficeSecurityAccessor">Used to find the current user, who decides whether sensitive values are exported.</param>
+    /// <param name="localizedTextService">Provides the text that replaces a withheld sensitive value.</param>
+    /// <param name="globalSettings">Provides the default backoffice language, used when the user has none.</param>
+    /// <param name="recordReaderService">
+    /// Not used. It is only here so this constructor's parameters include the obsolete constructor's: the DI container
+    /// throws an ambiguity error when a shorter constructor has a parameter the longest one lacks. It is optional
+    /// because Forms only registers it when record indexing is enabled. Removed with the obsolete constructor in v21.0.0.
+    /// </param>
+    [ActivatorUtilitiesConstructor]
+    public ExportEntriesAction(
+        ActionInfrastructure infrastructure,
+        IFormService formService,
+        IFormRecordSearcher formRecordSearcher,
+        IRecordStorage recordStorage,
+        IBackOfficeSecurityAccessor backOfficeSecurityAccessor,
+        ILocalizedTextService localizedTextService,
+        IOptions<GlobalSettings> globalSettings,
+        IRecordReaderService? recordReaderService = null)
+        : base(infrastructure)
+    {
+        _formService = formService;
+        _formRecordSearcher = formRecordSearcher;
+        _recordStorage = recordStorage;
+        _backOfficeSecurityAccessor = backOfficeSecurityAccessor;
+        _localizedTextService = localizedTextService;
+        _globalSettings = globalSettings.Value;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ExportEntriesAction"/> class.
+    /// </summary>
+    /// <param name="infrastructure">The action infrastructure.</param>
+    /// <param name="recordReaderService">No longer used: entries are read from the database, not the search index.</param>
+    [Obsolete("Use the constructor taking IFormService, IFormRecordSearcher, IRecordStorage, IBackOfficeSecurityAccessor, ILocalizedTextService and IOptions<GlobalSettings>. Will be removed in v21.0.0.")]
     public ExportEntriesAction(
         ActionInfrastructure infrastructure,
         IRecordReaderService recordReaderService)
-        : base(infrastructure)
+        : this(
+            infrastructure,
+            StaticServiceProvider.Instance.GetRequiredService<IFormService>(),
+            StaticServiceProvider.Instance.GetRequiredService<IFormRecordSearcher>(),
+            StaticServiceProvider.Instance.GetRequiredService<IRecordStorage>(),
+            StaticServiceProvider.Instance.GetRequiredService<IBackOfficeSecurityAccessor>(),
+            StaticServiceProvider.Instance.GetRequiredService<ILocalizedTextService>(),
+            StaticServiceProvider.Instance.GetRequiredService<IOptions<GlobalSettings>>(),
+            recordReaderService)
     {
-        _recordReaderService = recordReaderService;
     }
 
     /// <inheritdoc />
@@ -43,15 +115,41 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
 
         var pageSize = Math.Clamp(settings.PageSize > 0 ? settings.PageSize : 100, 1, 500);
 
-        var result = settings.ApprovedOnly
-            ? _recordReaderService.GetApprovedRecordsFromForm(formId, 1, pageSize)
-            : _recordReaderService.GetRecordsFromForm(formId, 1, pageSize);
+        var (total, form, records) = ReadRecords(formId, pageSize, settings.ApprovedOnly);
+
+        // Same rule as the backoffice export: sensitive values are only exported for a user with sensitive-data
+        // access, and no user counts as no access. Otherwise they are replaced with the same "sensitive" text.
+        var withholdSensitive = form is not null && !HasAccessToSensitiveData();
+        // A form can hold two fields with the same id (Forms core tolerates it), so group rather than ToDictionary,
+        // and treat the id as sensitive if any field carrying it is.
+        var formFields = form?.AllFields
+            .GroupBy(f => f.Id.ToString())
+            .ToDictionary(g => g.Key, g => g.Any(f => f.ContainsSensitiveData)) ?? [];
+        var withheldText = withholdSensitive && formFields.Values.Any(sensitive => sensitive)
+            ? GetWithheldText()
+            : string.Empty;
 
         // Build a JSON array directly, embedding the pre-serialized field data
         // from GenerateRecordDataAsJson() without a deserialize-then-reserialize cycle.
         var entriesArray = new JsonArray();
-        foreach (var r in result.Items)
+        foreach (var r in records)
         {
+            var fields = JsonNode.Parse(r.GenerateRecordDataAsJson())!.AsObject();
+
+            // Allow list, like Forms' own export: only the form's current fields are output. Storage also returns
+            // values of fields since deleted from the form, which may have been sensitive, so they are dropped.
+            foreach (var key in fields.Select(f => f.Key).ToArray())
+            {
+                if (!formFields.TryGetValue(key, out var isSensitive))
+                {
+                    fields.Remove(key);
+                }
+                else if (isSensitive && withholdSensitive)
+                {
+                    fields[key] = withheldText;
+                }
+            }
+
             var entry = new JsonObject
             {
                 ["uniqueId"] = r.UniqueId.ToString(),
@@ -59,9 +157,10 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
                 ["updated"] = r.Updated,
                 ["state"] = r.State.ToString(),
                 ["ip"] = r.IP,
-                ["memberKey"] = r.MemberKey,
+                // The member is sensitive data too: the backoffice export leaves it out for a user without access.
+                ["memberKey"] = withholdSensitive ? null : r.MemberKey,
                 ["culture"] = r.Culture,
-                ["fields"] = JsonNode.Parse(r.GenerateRecordDataAsJson()),
+                ["fields"] = fields,
             };
             entriesArray.Add(entry);
         }
@@ -69,9 +168,77 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
         return Task.FromResult<ActionResult>(Success(new ExportEntriesOutput
         {
             FormId = formId,
-            TotalCount = result.Total,
+            TotalCount = total,
             ExportedCount = entriesArray.Count,
             EntriesJson = entriesArray.ToJsonString(),
         }));
+    }
+
+    // Localized in the current backoffice user's language, else the default backoffice language, not
+    // CultureInfo.CurrentCulture: a background run's thread culture is unrelated to any language file.
+    private string GetWithheldText()
+    {
+        var language = _backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.Language;
+        if (string.IsNullOrWhiteSpace(language))
+        {
+            language = _globalSettings.DefaultUILanguage;
+        }
+
+        CultureInfo culture;
+        try
+        {
+            culture = UmbracoUserExtensions.GetUserCulture(language, _localizedTextService, _globalSettings);
+        }
+        catch (CultureNotFoundException)
+        {
+            culture = CultureInfo.GetCultureInfo("en-US");
+        }
+
+        // A missing key comes back as "[key]", which must never end up in the export.
+        var text = _localizedTextService.Localize("content", "isSensitiveValue", culture).Trim();
+        return text.Length == 0 || text == "[isSensitiveValue]" ? DefaultWithheldText : text;
+    }
+
+    private bool HasAccessToSensitiveData()
+        => _backOfficeSecurityAccessor.BackOfficeSecurity?.CurrentUser?.HasAccessToSensitiveData() == true;
+
+    // Reads from the database rather than IRecordReaderService, which is backed by the search index and can
+    // lag behind a record submitted moments earlier. The searcher pages, filters and sorts in SQL and returns
+    // display models, so only the matching ids are taken from it and the Records are re-read from storage:
+    // that keeps GenerateRecordDataAsJson() as the source of the field data.
+    private (long Total, Form? Form, IReadOnlyList<Record> Records) ReadRecords(Guid formId, int pageSize, bool approvedOnly)
+    {
+        var form = _formService.Get(formId);
+        if (form is null)
+        {
+            return (0, null, []);
+        }
+
+        var filter = new RecordFilter
+        {
+            Skip = 0,
+            Take = pageSize,
+            SortBy = "created",
+            SortOrder = RecordSorting.Descending,
+            StartDate = EarliestCreated,
+            States = approvedOnly ? [FormState.Approved] : [],
+        };
+
+        var page = _formRecordSearcher.QueryDataBase(formId, filter, form);
+        var uniqueIds = page.Results.Select(x => x.UniqueId).ToArray();
+        if (uniqueIds.Length == 0)
+        {
+            return (page.TotalNumberOfResults, form, []);
+        }
+
+        // Storage does not preserve the requested order, so project back onto the searcher's order.
+        var recordsById = _recordStorage.GetRecords(uniqueIds, form)
+            .GroupBy(r => r.UniqueId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        return (
+            page.TotalNumberOfResults,
+            form,
+            uniqueIds.Where(recordsById.ContainsKey).Select(id => recordsById[id]).ToList());
     }
 }
