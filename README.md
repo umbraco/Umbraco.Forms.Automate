@@ -30,7 +30,7 @@ No further wiring is required — triggers and actions are auto-discovered by Um
 
 - .NET 10.0
 - Umbraco CMS 17.x
-- Umbraco Forms 17.3+
+- Umbraco Forms 17.4+
 - Umbraco.Automate 17.0+
 
 ## Triggers
@@ -61,7 +61,7 @@ Run Forms operations from an Automate flow.
 
 Reads entries from the Forms database, so an entry submitted a moment ago is included. Each entry holds only the form's current fields; fields removed from the form are not exported.
 
-This matches the Forms backoffice export. For a field marked as containing sensitive data, the value is exported only when the automation's workspace service account is in the CMS *Sensitive data* user group. Otherwise the value reads `This value is hidden.` (or its translation) and `memberKey` is `null`.
+This matches the Forms backoffice export from Forms 17.4.8 (earlier 17.4.x versions still include the member in their own export). For a field marked as containing sensitive data, the value is exported only when the automation's workspace service account is in the CMS *Sensitive data* user group. Otherwise the value reads `This value is hidden.` (or its translation) and `memberKey` is `null`.
 
 Unlike the triggers, which leave sensitive fields out entirely, this action keeps the field and hides its value. Exported values pass through Automate's own tables and logs, so add the service account to the *Sensitive data* group only when that is acceptable.
 
