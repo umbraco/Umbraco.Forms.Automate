@@ -120,10 +120,12 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
         // Same rule as the backoffice export: sensitive values are only exported for a user with sensitive-data
         // access, and no user counts as no access. Otherwise they are replaced with the same "sensitive" text.
         var withholdSensitive = form is not null && !HasAccessToSensitiveData();
-        var sensitiveFieldKeys = withholdSensitive
-            ? form!.AllFields.Where(f => f.ContainsSensitiveData).Select(f => f.Id.ToString()).ToArray()
-            : [];
-        var withheldText = withholdSensitive && sensitiveFieldKeys.Length > 0
+        // A form can hold two fields with the same id (Forms core tolerates it), so group rather than ToDictionary,
+        // and treat the id as sensitive if any field carrying it is.
+        var formFields = form?.AllFields
+            .GroupBy(f => f.Id.ToString())
+            .ToDictionary(g => g.Key, g => g.Any(f => f.ContainsSensitiveData)) ?? [];
+        var withheldText = withholdSensitive && formFields.Values.Any(sensitive => sensitive)
             ? GetWithheldText()
             : string.Empty;
 
@@ -133,9 +135,19 @@ public sealed class ExportEntriesAction : ActionBase<ExportEntriesSettings, Expo
         foreach (var r in records)
         {
             var fields = JsonNode.Parse(r.GenerateRecordDataAsJson())!.AsObject();
-            foreach (var key in sensitiveFieldKeys.Where(fields.ContainsKey))
+
+            // Allow list, like Forms' own export: only the form's current fields are output. Storage also returns
+            // values of fields since deleted from the form, which may have been sensitive, so they are dropped.
+            foreach (var key in fields.Select(f => f.Key).ToArray())
             {
-                fields[key] = withheldText;
+                if (!formFields.TryGetValue(key, out var isSensitive))
+                {
+                    fields.Remove(key);
+                }
+                else if (isSensitive && withholdSensitive)
+                {
+                    fields[key] = withheldText;
+                }
             }
 
             var entry = new JsonObject
