@@ -63,8 +63,15 @@ not on branch push.
    ```bash
    gh release create release-19.0.0-rc1 --target v19/dev --prerelease --generate-notes
    ```
-   Use `--generate-notes` — GitHub's auto-generated summary of merged PRs since the previous release.
-   Do not hand-write release notes. Never add `--prerelease` to a stable release.
+   Always pass `--generate-notes` (GitHub's auto-generated summary of merged PRs since the previous
+   release). For a v19 pre-release or the first stable `19.0.0`, also pass `--notes-file` with a short
+   intro and a `## Breaking changes` section copied from "Breaking changes for consumers" in
+   `docs/upgrades/v19.md`; gh puts the `--notes-file` text above the generated notes. For a
+   pre-release the intro says to install with `dotnet add package Umbraco.Forms.Automate --prerelease`:
+   ```bash
+   gh release create release-19.0.0-rc1 --target v19/dev --prerelease --generate-notes --notes-file notes.md
+   ```
+   Patch and minor releases on v18 and v17 stay generated-only. Never add `--prerelease` to a stable release.
 
 8. **Push the merge commit:**
    ```bash
