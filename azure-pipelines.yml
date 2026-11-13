@@ -5,6 +5,7 @@ trigger:
     include:
       - main
       - dev
+      - v19/dev
       - release/*
       - hotfix/*
       - feature/*
@@ -14,6 +15,7 @@ pr:
     include:
       - main
       - dev
+      - v19/dev
 
 resources:
   repositories:

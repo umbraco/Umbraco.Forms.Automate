@@ -20,9 +20,13 @@ Umbraco.Forms.Automate is a provider package that connects [Umbraco Forms](https
 
 ## Installation
 
+Version 19 is a pre-release (labelled `-rcN`) while Umbraco CMS 19 is in pre-release. It is on nuget.org, so there is no feed to add. Install it with `--prerelease`:
+
 ```bash
-dotnet add package Umbraco.Forms.Automate
+dotnet add package Umbraco.Forms.Automate --prerelease
 ```
+
+Version 18 installs without the flag: `dotnet add package Umbraco.Forms.Automate`.
 
 No further wiring is required — triggers and actions are auto-discovered by Umbraco Automate.
 
@@ -90,7 +94,7 @@ demo/
 
 ### NuGet feeds
 
-This project uses [central package management](https://learn.microsoft.com/en-us/nuget/consume-packages/Central-Package-Management). The `Umbraco.Automate.*` packages are sourced from the Umbraco Nightly feed via `nuget.config`.
+This project uses [central package management](https://learn.microsoft.com/en-us/nuget/consume-packages/Central-Package-Management). `nuget.config` uses nuget.org only, which carries the Umbraco.Automate and Umbraco CMS 19 release candidates.
 
 ## License
 

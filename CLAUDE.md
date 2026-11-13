@@ -9,7 +9,7 @@ Repo: `github.com/umbraco/Umbraco.Forms.Automate`. Azure DevOps project/pipeline
 
 ## Architecture
 
-Single small class library, `src/Umbraco.Forms.Automate/Umbraco.Forms.Automate.csproj` (targets `net10.0`,
+Single small class library, `src/Umbraco.Forms.Automate/Umbraco.Forms.Automate.csproj` (targets `net11.0`,
 set via the shared `Directory.Build.props`). Two package dependencies define the whole surface area:
 `Umbraco.Automate.Core` (the trigger/action/settings SDK) and `Umbraco.Forms.Core` (Forms' domain model
 and services). There is no web project, no controllers, no persistence layer in this repo — everything is
@@ -76,11 +76,18 @@ Both triggers subscribe to Umbraco Forms' own CMS notifications
   output shape, which is alias-keyed), builds a `Record`/`RecordField` graph, and calls
   `IRecordService.SubmitAsync`. All failure paths return `ActionResult.Failed(..., StepRunErrorCategory.Validation)` — there is no "system/unexpected error" category used here; malformed input,
   missing form, and bad JSON are all treated as user/config errors, not runtime failures.
-- `ExportEntriesAction` (`Actions/ExportEntriesAction.cs`) — reads via `IRecordReaderService`
-  (`GetRecordsFromForm` or `GetApprovedRecordsFromForm` depending on the `ApprovedOnly` toggle), clamps
-  `PageSize` to `[1, 500]` (`Actions/ExportEntriesAction.cs:44`), and hand-builds a `JsonArray` by parsing
-  each record's own `GenerateRecordDataAsJson()` output rather than deserializing-then-reserializing —
-  intentional to avoid an unnecessary round-trip (see the comment at `Actions/ExportEntriesAction.cs:50-51`).
+- `ExportEntriesAction` (`Actions/ExportEntriesAction.cs`) — reads from the database, not the search index
+  (the index lags a just-submitted entry). `ReadRecords` calls `IFormRecordSearcher.QueryDataBase` with
+  `Take = PageSize` (clamped to `[1, 500]`, `:116`), newest first, `States = [Approved]` when `ApprovedOnly`
+  is set, and an explicit `StartDate` of 1900-01-01 (the searcher swaps a default date for "the last 2000
+  days", which would drop older entries). That gives the entry ids and the total count; the `Record`s
+  come from `IRecordStorage.GetRecords` and are re-ordered to the searcher's order, because storage does not
+  keep it. It hand-builds a `JsonArray` by parsing each record's own `GenerateRecordDataAsJson()` output
+  rather than deserializing-then-reserializing. Like Forms core's export, it keeps only the form's current
+  fields and, unless the run's backoffice user has sensitive-data access (no user = no access), replaces
+  sensitive field values with the localized "sensitive value" text and sets `memberKey` to `null`.
+  `IRecordReaderService` is an optional last constructor parameter that is not used; it only keeps the
+  `[Obsolete]` constructor resolvable and goes with that constructor in v21.0.0.
 
 ### Constants and section gating
 
@@ -92,7 +99,7 @@ step types in this package.
 
 ## Commands
 
-All commands run from the repo root unless noted. `global.json` pins the .NET SDK to `10.0.100`
+All commands run from the repo root unless noted. `global.json` pins the .NET SDK to `11.0.100`
 (`rollForward: latestFeature`).
 
 ```bash
@@ -128,7 +135,7 @@ adds a named pipe (Windows) / Unix socket listener whose name is derived from th
 worktree folder name (`GetUniqueIdentifier()`, `Composers/NamedPipeListenerComposer.cs:100-145`), plus a
 `GET /site-address` endpoint that returns the resolved HTTPS URL as plain text. This exists so tooling can
 find/attach to a *specific* running worktree's demo instance without port-scanning — relevant because this
-repo keeps persistent worktrees under `.claude/worktrees/` (`support-17.x`, and ad-hoc feature worktrees).
+repo keeps persistent worktrees under `.claude/worktrees/` (`support-17.x`, `v19-dev`, and ad-hoc feature worktrees).
 This is dev-only infrastructure, not part of the shipped package.
 
 ## Style Guide
@@ -176,7 +183,7 @@ tests OS-agnostic (no hardcoded path separators, no OS-specific line endings ass
 
 Actions follow one convention: on any input/config problem, return
 `ActionResult.Failed(exception, StepRunErrorCategory.Validation)` rather than throwing (see
-`Actions/SubmitFormAction.cs:42-53,65-68` and `Actions/ExportEntriesAction.cs:39-42`). There is currently no
+`Actions/SubmitFormAction.cs:42-53,65-68` and `Actions/ExportEntriesAction.cs:109-114`). There is currently no
 example in this repo of `StepRunErrorCategory` values other than `Validation` — if you add an action that
 can fail for infrastructure reasons (e.g. Forms service unavailable) distinct from bad user input, check
 `Umbraco.Automate.Core`'s `StepRunErrorCategory` enum for the right category rather than defaulting
@@ -205,10 +212,10 @@ Forms-side bug, not something this package defends against.
   the access-control boundary for this package — it gates visibility in the flow editor for users without
   Forms section access, because trigger/action output surfaces PII (submitter IP, member key, raw field
   values). Any new step type touching form records must carry this attribute.
-- `SubmitFormAction.FieldValuesJson` and `ExportEntriesAction` output both move raw form data (potentially
-  PII) through Automate flow bindings/logs. This package doesn't redact or filter — that's a deliberate
-  scope boundary (Forms already governs field-level data classification), but be aware if you're asked to
-  add e.g. an audit trail or redaction feature that it doesn't exist today.
+- `SubmitFormAction.FieldValuesJson` and `ExportEntriesAction` output both move form data (potentially
+  PII) through Automate flow bindings/logs. `SubmitFormAction` doesn't redact or filter. `ExportEntriesAction`
+  masks only the values Forms marks sensitive, as above; other fields and the IP are exported as-is. Be
+  aware if you're asked to add e.g. an audit trail or wider redaction that it doesn't exist today.
 - Field-value JSON in `SubmitFormAction` is deserialized with `System.Text.Json` and guarded by a
   `try/catch (JsonException)` (`Actions/SubmitFormAction.cs:56-68`) before ever touching Forms services —
   don't remove that guard when refactoring; unguarded `Deserialize` on user/binding-supplied JSON is the
@@ -217,14 +224,19 @@ Forms-side bug, not something this package defends against.
 ## Teamwork / Workflow
 
 **Branch model** (shared across all `Umbraco.*.Automate` satellites):
-- `main` = current CMS major line (v18).
+- `main` = the v18 line.
+- `v19/dev` = the v19 line while CMS 19 is in pre-release (CMS 19.0.0-rc1, `version.json` `19.0.0-rc1`).
+  Long-lived like `main` and `support/17.x`: pushes to it build but never publish. Each pre-release
+  (`19.0.0-rc1`, `-rc2`, ...) is cut from `v19/dev` as `release/YYYY.MM.N`, published from that branch to
+  MyGet and NuGet.org, then merged back into `v19/dev`. When CMS 19 is GA the package drops the `-rc` label
+  and releases as `19.0.0`. At v19 GA, `main` is expected to become the v19 line (not decided yet).
 - `support/17.x` = previous CMS major line (v17), checked out as a persistent git worktree at
   `.claude/worktrees/support-17.x`.
-- Releases are cut as `release/YYYY.MM.N` branches, where `N` is a single counter shared across **both**
-  lines for the month (e.g. `release/2026.07.1` for v18 and `release/2026.07.2` for v17 in the same
-  month — not independent per-line counters).
+- Releases are cut as `release/YYYY.MM.N` branches, where `N` is a single counter shared across **all**
+  lines (v18, v17, v19) for the month (e.g. `release/2026.07.1` for v18 and `release/2026.07.2` for v17 in
+  the same month — not independent per-line counters).
 
-**PRs**: `azure-pipelines.yml:12-16` triggers PR validation only against `main` and `dev` (there's no `dev`
+**PRs**: `azure-pipelines.yml` triggers PR validation only against `main`, `dev` and `v19/dev` (there's no `dev`
 branch currently checked out locally, but the trigger config includes it — likely vestigial from a shared
 template; don't be surprised if `dev` doesn't exist). Recent history shows small, single-purpose PRs
 merged via GitHub PR (`Merge pull request #9 from umbraco/feature/dynamic-form-fields`, etc.), with fix
@@ -233,8 +245,8 @@ branches following `fix/<short-description>` and backport branches following
 concrete example this pattern came from.
 
 **CI** (`azure-pipelines.yml`, which extends `devops/templates/azure-pipelines-template.yml` from the
-shared `umbraco/Umbraco.Build` repo): triggers on push to `main`, `dev`, `release/*`, `hotfix/*`,
-`feature/*`. Stages — `BuildAndPack` (restore, build with Nerdbank.GitVersioning stamping the version,
+shared `umbraco/Umbraco.Build` repo): triggers on push to `main`, `dev`, `v19/dev`, `release/*`,
+`hotfix/*`, `feature/*`. Stages — `BuildAndPack` (restore, build with Nerdbank.GitVersioning stamping the version,
 pack, publish the `.nupkg` + full source tree as pipeline artifacts) and `Test` (downloads the
 `build_output` artifact, runs `dotnet test`), plus `GenerateSBOM` on `release/*`/`hotfix/*` only:
 `umbraco-sbom` with a license policy check (a violation fails the run), uploaded to Dependency-Track as
@@ -242,27 +254,46 @@ pack, publish the `.nupkg` + full source tree as pipeline artifacts) and `Test` 
 another branch without uploading.
 
 **Publishing** happens on `release/*` and `hotfix/*` builds only: `Prerelease` pushes the package to the
-MyGet pre-releases feed, and `Release` pushes it to NuGet.org after someone approves "Wait for manual
-approval" in the run. Every other branch skips both — `main` is a public release in `version.json` too,
-so `azure-pipelines.yml` gates them by branch rather than leaving the template's `auto`. The queue-time
+MyGet pre-releases feed, then `Release` pushes it to NuGet.org after someone approves "Wait for manual
+approval" in the run (no `release_environment` is set, so the approval is a manual-validation task in
+the run). A v19 `-rcN` takes the same path, so it lands on both feeds. Every other branch skips both —
+`main` is a public release in `version.json` too, so `azure-pipelines.yml` gates them by branch rather than
+leaving the template's `auto`. That includes `v19/dev`: it builds but never publishes. The queue-time
 **Prerelease to MyGet** / **Release to NuGet.org** parameters override this (e.g. `nightly` pushes a
-`main` build to the MyGet nightly feed).
+`main` build to the MyGet nightly feed). `github_release_connection` isn't set, so the pipeline creates no
+GitHub Release; `/post-release-cleanup` does.
 
 **Release process** — two Claude Code skills automate the mechanics precisely; read them rather than this
 summary for exact commands:
-- `.claude/skills/release-management/SKILL.md` — cuts a `release/YYYY.MM.N` branch from `main` or
-  `support/17.x`, bumps `Directory.Packages.props`'s `Umbraco.Automate*` ranges and `version.json` to the
-  target major's stable floor (`[X.0.0, X.999.999)`).
+- `.claude/skills/release-management/SKILL.md` — cuts a `release/YYYY.MM.N` branch from `main`,
+  `support/17.x` or `v19/dev`, bumps `Directory.Packages.props`'s `Umbraco.Automate*` ranges and
+  `version.json` to the target major's stable floor (`[X.0.0, X.999.999)`). For a v19 pre-release it cuts
+  from `v19/dev`, keeps the Automate range on a pre-release floor that exists on nuget.org and
+  `version.json` on a not-yet-published `-rcN` version. It leaves the `Umbraco.Forms.Core` range alone.
 - `.claude/skills/post-release-cleanup/SKILL.md` — run only after the release build has published to
-  MyGet and NuGet.org; merges `--no-ff` back into the target branch, tags `release-<version>`, creates
-  a GitHub Release via `gh release create <tag> --target <branch> --generate-notes`, patch-bumps
-  `version.json` on the target branch for next-cycle nightlies, and deletes the release branch
-  (local + remote).
+  MyGet and NuGet.org; merges `--no-ff` back into the release's own line (`v19/dev` for a v19 pre-release,
+  never `main`), tags `release-<version>` (e.g. `release-19.0.0-rc1`), creates a GitHub Release via
+  `gh release create <tag> --target <branch> --generate-notes` (plus `--prerelease` for an `-rcN`, and
+  `--latest=false` for a release off `support/17.x`), bumps `version.json` on the target branch (patch
+  bump after a stable release; `19.0.0-rc1` → `19.0.0-rc2` after a pre-release, or `19.0.0` once CMS 19 is
+  GA), and deletes the release branch (local + remote). Never delete `v19/dev`.
+  `v19/dev` isn't in `publicReleaseRefSpec`, so its builds pack as `19.0.0--rc2.preview.<height>.g<sha>`
+  (format from Umbraco.GitVersioning.Extensions; read `PackageVersion`, not NBGV's
+  `NuGetPackageVersion`). That sorts below every shipped `-rcN`, including the previous one, and doesn't
+  satisfy a `[19.0.0-rc1, …)` floor. A `release/*` build packs the bare `version.json` version.
 
-`nuget.config` sources nuget.org + the Umbraco Nightly and Umbraco Prereleases MyGet feeds, with package
-source mapping restricting `Umbraco*` packages to the Umbraco feeds specifically
-(`nuget.config:9-23`) — this is how `main` normally resolves `Umbraco.Automate.Core`'s floating
-`18.0.0-*`/nightly version outside of a release branch.
+**Package versioning mechanics:** on `v19/dev`, `Directory.Packages.props` pins `Umbraco.Automate.Core`/
+`.Testing` and `Umbraco.Forms.Core` to `[19.0.0-rc1, 19.999.999)`. At v19 GA the Automate floors move to
+the stable `[19.0.0, 19.999.999)`. NuGet resolves a range to its floor, so the range pulls the floor
+version rather than a nightly (a floating `X.0.0-*` would resolve to the highest prerelease, which is why
+release-management writes an explicit range). `Umbraco.Forms.Core` is the product package: its range is
+managed by hand and release-management doesn't touch it.
+
+**NuGet sources** (`nuget.config`) on `v19/dev`: nuget.org only, mapping `*` to it. The CMS, Forms and
+Automate 19 RCs are on nuget.org, so there's no MyGet source. The `<clear />` at the top of
+`<packageSourceMapping>` stops NuGet merging mappings from a parent config, such as another line's checkout
+holding this worktree under `.claude/worktrees`. `main` and `support/17.x` keep their own `nuget.config`,
+so check the file on the branch you're on.
 
 ## Edge Cases
 
@@ -293,12 +324,15 @@ source mapping restricting `Umbraco*` packages to the Umbraco feeds specifically
 - The demo site (`demo/`) deliberately opts *out* of central package management
   (`demo/Directory.Packages.props: ManagePackageVersionsCentrally=false`) and disables package validation
   (`demo/Directory.Build.props: EnablePackageValidation=false`) — its own `.csproj` pins concrete versions
-  directly, including a **floating prerelease** `Umbraco.Automate` (`18.0.0-*`), unlike the root
-  `Directory.Packages.props`'s stable-range approach used for the shipped package. This is intentional: the
-  demo needs to run against whatever the latest Automate nightly is, not a pinned release range. Building
-  the demo site can regenerate an untracked `appsettings-schema*.json` file
-  (`demo/Umbraco.Forms.Automate.DemoSite/appsettings-schema*.json`) — leave it uncommitted if you notice it
-  dirty in `git status`.
+  directly, including `Umbraco.Cms` `19.0.0-rc1`, `Umbraco.Forms` `19.0.0-rc1`, `Clean` `19.0.0-rc01` and
+  `Umbraco.Automate` as the range `[19.0.0-rc1, 19.999.999)` on `v19/dev` (`main` floats `18.0.0-*`). It is a
+  range, not a floating nightly: the range resolves to the floor, which keeps release builds reproducible.
+  Every demo build rewrites the tracked `appsettings-schema.json`, `appsettings-schema.Umbraco.Cms.json`,
+  `appsettings-schema.Umbraco.Forms.json`, `appsettings-schema.Umbraco.Licenses.json` and
+  `umbraco-package-schema.json` in `demo/Umbraco.Forms.Automate.DemoSite/`; revert them with
+  `git checkout --` unless a change is intended. The v19 build also generates two untracked files,
+  `appsettings-schema.Umbraco.Automate.json` and `appsettings-schema.Umbraco.Cms.Search.Examine.json`; delete
+  them rather than committing them.
 
 ## Agentic Workflow
 
@@ -312,7 +346,7 @@ source mapping restricting `Umbraco*` packages to the Umbraco feeds specifically
   services those classes depend on (see **Architecture** → Composition root).
 - When running tests or the demo site locally, be aware of the persistent worktrees at
   `.claude/worktrees/support-17.x` (and possibly other feature worktrees) — confirm which checkout you're
-  actually in before assuming `main`-line dependency versions apply.
+  actually in before assuming `main`-line (v18) dependency versions apply.
 - Do not touch `Directory.Packages.props`'s `Umbraco.Automate*`/`Umbraco.Forms.Core` version ranges or
   `version.json` outside of the release-management skill's workflow — those are release-process state, not
   everyday dependency bumps.
@@ -325,9 +359,9 @@ source mapping restricting `Umbraco*` packages to the Umbraco feeds specifically
   `RecordApprovedNotification`, or (b) synchronously inside an `ActionBase.ExecuteAsync` call made by
   Automate's own flow-run engine. There is nothing in this repo that polls, schedules, or runs
   independently — all execution is driven by the host (Forms notifications or Automate flow runs).
-- **Integration surface with Umbraco Forms** is exactly three services: `IFormService` (form definitions —
+- **Integration surface with Umbraco Forms** is exactly these Forms services: `IFormService` (form definitions —
   used by both `FormFieldResolver` and `SubmitFormAction`), `IRecordService` (write path —
-  `SubmitFormAction`), and `IRecordReaderService` (read path — `ExportEntriesAction`). If Forms' SDK adds a
+  `SubmitFormAction`), and, for `ExportEntriesAction`, `IFormRecordSearcher` plus `IRecordStorage` (read path). If Forms' SDK adds a
   new capability you need, check whether it belongs on one of these existing services before reaching for a
   new one — the package currently keeps its Forms dependency surface intentionally narrow.
 - **Known limitation, not a bug**: the binding-expression picker cannot show field suggestions for "all
