@@ -32,10 +32,10 @@ No further wiring is required — triggers and actions are auto-discovered by Um
 
 ## Requirements
 
-- .NET 10.0
-- Umbraco CMS 18.x
-- Umbraco Forms 18.0+
-- Umbraco.Automate 18.0+
+- .NET 11.0
+- Umbraco CMS 19
+- Umbraco Forms 19
+- Umbraco Automate 19
 
 ## Triggers
 
@@ -94,7 +94,7 @@ demo/
 
 ### NuGet feeds
 
-This project uses [central package management](https://learn.microsoft.com/en-us/nuget/consume-packages/Central-Package-Management). `nuget.config` uses nuget.org only, which carries the Umbraco.Automate and Umbraco CMS 19 release candidates.
+This project uses [central package management](https://learn.microsoft.com/en-us/nuget/consume-packages/Central-Package-Management). `nuget.config` uses nuget.org only, which carries the Umbraco.Automate, Umbraco CMS 19 and Umbraco Forms 19 release candidates.
 
 ## License
 

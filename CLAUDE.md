@@ -360,7 +360,7 @@ so check the file on the branch you're on.
   Automate's own flow-run engine. There is nothing in this repo that polls, schedules, or runs
   independently — all execution is driven by the host (Forms notifications or Automate flow runs).
 - **Integration surface with Umbraco Forms** is exactly these Forms services: `IFormService` (form definitions —
-  used by both `FormFieldResolver` and `SubmitFormAction`), `IRecordService` (write path —
+  used by `FormFieldResolver`, `SubmitFormAction` and `ExportEntriesAction`), `IRecordService` (write path —
   `SubmitFormAction`), and, for `ExportEntriesAction`, `IFormRecordSearcher` plus `IRecordStorage` (read path). If Forms' SDK adds a
   new capability you need, check whether it belongs on one of these existing services before reaching for a
   new one — the package currently keeps its Forms dependency surface intentionally narrow.

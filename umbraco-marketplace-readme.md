@@ -13,7 +13,7 @@ Example: post to a channel when a form is submitted, or export entries on a sche
 
 ### Requirements
 
-- Umbraco CMS 17.x
-- Umbraco Forms 17.3+
-- Umbraco.Automate 17.0+
-- .NET 10.0
+- .NET 11.0
+- Umbraco CMS 19
+- Umbraco Forms 19
+- Umbraco Automate 19
