@@ -7,11 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Clean" Version="19.0.0-beta01" />
+    <PackageReference Include="Clean" Version="19.0.0-rc01" />
     <PackageReference Include="Umbraco.Cms" Version="19.0.0-rc1" />
     <PackageReference Include="Umbraco.Cms.DevelopmentMode.Backoffice" Version="19.0.0-rc1" />
-    <PackageReference Include="Umbraco.Automate" Version="[19.0.0-beta, 19.999.999)" />
-    <PackageReference Include="Umbraco.Forms" Version="19.0.0-beta" />
+    <PackageReference Include="Umbraco.Automate" Version="[19.0.0-rc1, 19.999.999)" />
+    <PackageReference Include="Umbraco.Forms" Version="19.0.0-rc1" />
   </ItemGroup>
 
   <ItemGroup>
