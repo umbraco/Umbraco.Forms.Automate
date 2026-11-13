@@ -37,6 +37,10 @@ not on branch push.
    git merge --no-ff origin/release/<name> -m "Merge release/<name> into <target>"   # <target> = the branch checked out above
    ```
 
+   If git says "Already up to date", there is no merge commit to tag. Usually the `--allow-empty` step
+   in `/release-management` was skipped (an empty-diff first RC), or the branch was already merged (for
+   example on a re-run). Stop and report.
+
 5. **Read the shipped version** from `version.json` on the merge commit (this is the released version set
    by `/release-management`, e.g. `18.0.0`, or a pre-release such as `19.0.0-rc1` on `v19/dev`).
 
@@ -72,9 +76,9 @@ not on branch push.
      version above the just-shipped one. (`main` is in `publicReleaseRefSpec`, so its builds pack the
      bare `version.json` version, not a `--preview.*` one.)
    - **Pre-release** (a suffix such as `-rc1`): move to the next pre-release, e.g. `19.0.0-rc1` →
-     `19.0.0-rc2`. Once CMS 19 is GA, move to the stable `19.0.0` instead (the floors in
-     `Directory.Packages.props` move to `[19.0.0, 19.999.999)` on that release branch, see
-     `/release-management`). Never patch-bump a pre-release. The next `release/*` branch must carry
+     `19.0.0-rc2`. Once CMS 19, Automate 19 and Forms 19 are all stable on nuget.org, move to the stable `19.0.0`
+     instead. The Automate floors (`[19.0.0, 19.999.999)`), the Forms floor and `version.json` move
+     together on that release branch, see `/release-management`. Never patch-bump a pre-release. The next `release/*` branch must carry
      a version that isn't published yet.
    - **Non-public builds.** `v19/dev` isn't in `publicReleaseRefSpec`, so its builds pack as
      `19.0.0--rc2.preview.<height>.g<sha>` (format from Umbraco.GitVersioning.Extensions; read

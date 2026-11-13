@@ -49,7 +49,7 @@ Both triggers inherit `DynamicFormRecordTriggerBase<TNotification>`
 Automate Core's `DynamicOutputNotificationTriggerBase<FormRecordTriggerSettings, TNotification>`. This is
 the mechanism behind the "Insert Binding Expression" picker showing `fields.<alias>` entries per form:
 
-- `FormFieldResolver.BuildOutputSchema(formIds)` (`Triggers/FormFieldResolver.cs:63-100`) builds a JSON
+- `FormFieldResolver.BuildOutputSchema(formIds)` (`Triggers/FormFieldResolver.cs:94-141`) builds a JSON
   Schema: the static `FormRecordOutput` envelope, plus — only when one or more forms are picked in the
   trigger's settings — a `fields` object unioning the picked forms' field aliases (camelCased, titled by
   the field's caption). This schema is what the flow-editor UI reads at *design time*.
@@ -228,7 +228,7 @@ Forms-side bug, not something this package defends against.
 - `v19/dev` = the v19 line while CMS 19 is in pre-release (CMS 19.0.0-rc1, `version.json` `19.0.0-rc1`).
   Long-lived like `main` and `support/17.x`: pushes to it build but never publish. Each pre-release
   (`19.0.0-rc1`, `-rc2`, ...) is cut from `v19/dev` as `release/YYYY.MM.N`, published from that branch to
-  MyGet and NuGet.org, then merged back into `v19/dev`. When CMS 19 is GA the package drops the `-rc` label
+  MyGet and NuGet.org, then merged back into `v19/dev`. When CMS 19, Automate 19 and Forms 19 are all stable the package drops the `-rc` label
   and releases as `19.0.0`. At v19 GA, `main` is expected to become the v19 line (not decided yet).
 - `support/17.x` = previous CMS major line (v17), checked out as a persistent git worktree at
   `.claude/worktrees/support-17.x`.
@@ -275,16 +275,16 @@ summary for exact commands:
   never `main`), tags `release-<version>` (e.g. `release-19.0.0-rc1`), creates a GitHub Release via
   `gh release create <tag> --target <branch> --generate-notes` (plus `--prerelease` for an `-rcN`, and
   `--latest=false` for a release off `support/17.x`), bumps `version.json` on the target branch (patch
-  bump after a stable release; `19.0.0-rc1` → `19.0.0-rc2` after a pre-release, or `19.0.0` once CMS 19 is
-  GA), and deletes the release branch (local + remote). Never delete `v19/dev`.
+  bump after a stable release; `19.0.0-rc1` → `19.0.0-rc2` after a pre-release, or `19.0.0` once CMS 19, Automate 19 and Forms 19 are
+  all stable), and deletes the release branch (local + remote). Never delete `v19/dev`.
   `v19/dev` isn't in `publicReleaseRefSpec`, so its builds pack as `19.0.0--rc2.preview.<height>.g<sha>`
   (format from Umbraco.GitVersioning.Extensions; read `PackageVersion`, not NBGV's
   `NuGetPackageVersion`). That sorts below every shipped `-rcN`, including the previous one, and doesn't
   satisfy a `[19.0.0-rc1, …)` floor. A `release/*` build packs the bare `version.json` version.
 
 **Package versioning mechanics:** on `v19/dev`, `Directory.Packages.props` pins `Umbraco.Automate.Core`/
-`.Testing` and `Umbraco.Forms.Core` to `[19.0.0-rc1, 19.999.999)`. At v19 GA the Automate floors move to
-the stable `[19.0.0, 19.999.999)`. NuGet resolves a range to its floor, so the range pulls the floor
+`.Testing` and `Umbraco.Forms.Core` to `[19.0.0-rc1, 19.999.999)`. At v19 GA (CMS 19, Automate 19 and Forms 19 all stable on nuget.org)
+the Automate floors move to the stable `[19.0.0, 19.999.999)`, with the `Umbraco.Forms.Core` floor, `version.json` and the demo's `Umbraco.Cms`, `Umbraco.Forms` and Clean pins. NuGet resolves a range to its floor, so the range pulls the floor
 version rather than a nightly (a floating `X.0.0-*` would resolve to the highest prerelease, which is why
 release-management writes an explicit range). `Umbraco.Forms.Core` is the product package: its range is
 managed by hand and release-management doesn't touch it.

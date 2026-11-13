@@ -87,23 +87,29 @@ A v19 pre-release is published to **both MyGet and NuGet.org**, labelled `-rcN` 
 `19.0.0-rc1`). It takes the same pipeline path as a stable release: the `release/*` branch makes it a
 public build, the Prerelease stage pushes to MyGet, and the Release stage pushes to NuGet.org after
 the manual approval. NuGet.org lists it as a pre-release, so `dotnet add package` skips it unless
-`--prerelease` is passed. Steps 1-5 and 8-9 are the same, with the base branch `origin/v19/dev`.
-Steps 6 and 7 change:
+`--prerelease` is passed. Steps 1-4 and 9 are the same. Steps 5-8 change as below:
 
+- **Base branch must exist.** If `origin/v19/dev` is missing, stop and ask: don't create it.
 - **Automate range** → `[<floor>, 19.999.999)`, where `<floor>` is the Automate pre-release this
   build targets (e.g. `19.0.0-rc1`). It must exist on nuget.org: check that the version is listed there,
-  not just on MyGet. It stays a pre-release floor, not `19.0.0`, until Automate 19 is stable.
+  not just on MyGet. It stays a pre-release floor until the stable move below.
 - **`version.json`** keeps its pre-release suffix: set it to `<version>`, this package's own next
-  unpublished pre-release (usually the one already in the file). Don't drop the suffix until CMS 19 is
-  GA, then use the normal v18/v17 steps with `X` = 19 (floors `[19.0.0, 19.999.999)`, `version.json`
-  `19.0.0`).
+  unpublished pre-release (usually the one already in the file). Move to stable only when CMS 19, Automate 19 and Forms 19 are all stable on nuget.org. Then
+  use the normal v18/v17 steps with `X` = 19: the Automate floors (`[19.0.0, 19.999.999)`), the Forms
+  floor and `version.json` (`19.0.0`) move together, in the same commit.
 - **The version must not already be published.** A `release/*` branch is a public build, so it
   produces exactly the `version.json` version (`release/*` is in `publicReleaseRefSpec`, so
   `19.0.0-rc1` stays `19.0.0-rc1`). Check both feeds first. After each pre-release,
   `/post-release-cleanup` moves `version.json` on `v19/dev` to the next pre-release (`19.0.0-rc2`).
 - Commit message: `build(deps): Release v19 pre-release <version> against Umbraco.Automate <floor>`.
+- **Empty diff.** For the first RC on a line, `v19/dev` already holds the rc values (floors
+  `[19.0.0-rc1, …)`, `version.json` `19.0.0-rc1`), so steps 6 and 7 change nothing and a plain commit
+  fails with "nothing to commit". Commit with `git commit --allow-empty -m "<message above>"`. Without it the
+  release branch has no commit of its own, `/post-release-cleanup`'s merge says "Already up to date", and
+  there is no merge commit to tag or for step 3's monthly counter scan.
 - **Product entry** (`Umbraco.Forms.Core`) is left alone, as for v18/v17. Its pre-release floor
-  (`19.0.0-rc1`) is managed by hand when the Forms RC moves.
+  (`19.0.0-rc1`) is managed by hand when the Forms RC moves. At GA it moves to the first
+  stable Forms 19 version: a stable package can't depend on a pre-release (NU5104).
 - The `nuget.config` here lists nuget.org only, so the pre-release restores from nuget.org. If a
   needed pre-release (CMS, Licenses, Forms, Automate) isn't on nuget.org, stop and ask: don't add
   a feed to the shipped repo without a decision.
